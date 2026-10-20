@@ -1,0 +1,97 @@
+# -----------------------------------------------------------------------------
+# Operating system files
+# -----------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# -----------------------------------------------------------------------------
+# Local toolchains and downloaded SDKs
+# Keep these outside the repository so a clean checkout remains reproducible.
+# -----------------------------------------------------------------------------
+.tools/
+.fvm/
+
+# -----------------------------------------------------------------------------
+# Rust / Cargo
+# -----------------------------------------------------------------------------
+/target/
+**/target/
+
+# -----------------------------------------------------------------------------
+# Flutter / Dart generated files
+# -----------------------------------------------------------------------------
+**/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/linux/flutter/ephemeral/
+app/windows/flutter/ephemeral/
+app/android/.gradle/
+app/android/local.properties
+app/ios/Flutter/ephemeral/
+
+# -----------------------------------------------------------------------------
+# Node, Bun, Vite, TanStack Start, and frontend build output
+# -----------------------------------------------------------------------------
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/.output/
+**/.vinxi/
+**/.tanstack/
+**/.nitro/
+**/.wrangler/
+**/.cache/
+**/.parcel-cache/
+**/.vite/
+**/.eslintcache
+
+# Local frontend configuration and environment files.
+**/*.local
+.env
+.env.*
+!.env.example
+
+# -----------------------------------------------------------------------------
+# Test and coverage output
+# -----------------------------------------------------------------------------
+**/coverage/
+**/test-results/
+**/playwright-report/
+
+# -----------------------------------------------------------------------------
+# Logs and temporary files
+# -----------------------------------------------------------------------------
+*.log
+*.log.*
+*.pid
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# -----------------------------------------------------------------------------
+# Editors and IDEs
+# -----------------------------------------------------------------------------
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user
+*.userosscache
+*.sln
+*.swp
+*.swo
+
+# -----------------------------------------------------------------------------
+# Generated archives and local reports
+# -----------------------------------------------------------------------------
+*.tmp
+*.temp
+*.bak
+*.zip
+*.tar
+*.tar.gz

@@ -1,30 +1,30 @@
 # Multi-Device Audio Sharing App: Technology, Challenges, Solutions and Feasibility
 
-Prepared for Shubham, October 2026. This is a brainstorming and feasibility document. The technical details come from general engineering knowledge plus a small amount of web research on Snapcast, Opus and WebRTC. Nothing here has been tested on real devices, so treat every number as a ballpark and verify it with a prototype.
+Prepared for Shubham, October 2026. This is a brainstorming and feasibility document for a fun student project motivated by a genuine sharing problem, not a current business plan. The technical details come from general engineering knowledge plus a small amount of web research on Snapcast, Opus and WebRTC. Nothing here has been tested on real devices, so treat every number as a ballpark and verify it with a prototype.
 
 ## 1. Project Summary
 
-**The idea:** an application that plays the same audio on several output devices at once, such as Bluetooth headphones, Bluetooth speakers, USB audio devices and wired headphones, with the least possible delay between them.
+**The idea:** a non-Apple application that lets several people hear the same audio on their own devices at once, using Bluetooth headphones, Bluetooth speakers, USB audio devices or wired headphones, with the smallest practical difference in timing between them.
 
 **Two product shapes were explored:**
 
 - **Local routing:** one computer sends audio to several outputs connected to that same computer.
-- **Wi-Fi listener mode:** the host starts a hotspot, other people join it with their phones, and each phone plays the audio through its own Bluetooth headphones.
+- **Wi-Fi host/listener mode:** any supported non-Apple device can host or listen. The host starts a hotspot, other people join it, and each listener device plays the audio through its own output, including Bluetooth headphones.
 
-The second shape is the one this document focuses on, because it avoids the biggest limit of the first, which is that one device's Bluetooth radio can only serve a few headphones.
+The second shape is the one this document focuses on, because it avoids the biggest limit of the first, which is that one device's Bluetooth radio can only serve a few headphones. Apple devices are out of scope for the initial project.
 
 ## 2. Summary Table
 
 | Area | Conclusion |
 | --- | --- |
-| Overall feasibility | Feasible for Windows host to Android listeners, music-first. Not feasible as "any device, any content, zero setup" |
+| Overall feasibility | Feasible for a supported non-Apple host/listener system, music-first. Platform support must be added incrementally; "any device, any content, zero setup" is not realistic |
 | Biggest technical risk | Unknown and variable Bluetooth latency on each listener's headphones |
 | Biggest environmental risk | Hotspots that block device-to-device traffic (client isolation) |
 | Biggest platform risk | Background audio on phones, especially iPhone |
-| Best MVP | Windows host app + Android listener app, music only, manual delay slider |
+| Best MVP | Windows host + Android listeners first, with the protocol designed for either role; music only, manual delay slider |
 | Best transport idea | Opus-encoded audio over the local Wi-Fi network with clock-synchronized playback |
 | Best existing tool to learn from | Snapcast (open source, synchronized multi-room audio) |
-| Main business risk | Phone makers and Bluetooth Auracast absorbing the feature natively |
+| Main project risk | Platform differences, hotspot behavior and Bluetooth variance make the experience difficult to reproduce |
 
 ## 3. How It Works (Simple Version)
 
@@ -35,7 +35,7 @@ plays YouTube/Spotify   -Wi-Fi->  app receives the audio   -BT->   plays the sou
                                  phone's normal output
 ```
 
-1. The host turns on a hotspot and runs the app, which captures system audio.
+1. The host turns on a hotspot and runs the app, which captures system audio. The host may be Windows, Android or another supported non-Apple platform, although Windows is the first target.
 2. Listeners join the hotspot and open the app on their phones.
 3. Each listener pairs their headphones to their own phone, as they always do. The app is not involved in that step.
 4. The host sends timestamped audio over Wi-Fi. Each phone plays it on schedule through its normal output, and its own Bluetooth carries it to the headphones.
@@ -47,7 +47,7 @@ plays YouTube/Spotify   -Wi-Fi->  app receives the audio   -BT->   plays the sou
 ### 4.1 Audio capture on the host
 
 - **Windows:** WASAPI loopback capture records whatever the system is playing, and does not need a custom driver. A virtual audio device (needs a signed driver) is only required if you want full control, for example to delay the host's own speakers.
-- **macOS:** possible through an audio plug-in or ScreenCaptureKit, which needs a screen-recording permission. More effort than Windows.
+- **Apple platforms:** out of scope for this project. They would require separate capture and background-playback investigation.
 - **Android as host:** restricted. Playback capture needs user consent, and apps can opt out of being captured. DRM-protected content is blocked.
 
 ### 4.2 Compression: Opus
@@ -79,7 +79,7 @@ A newer protocol called Sendspin appears to offer NTP-style clock sync, jitter b
 ### 4.6 Suggested architecture
 
 - **Core engine (C++ or Rust):** ring buffers, per-device delay lines, adaptive resampler, drift controller, mixer. No OS dependency.
-- **Platform adapters:** WASAPI on Windows, CoreAudio on macOS, Oboe/AAudio on Android.
+- **Platform adapters:** WASAPI on Windows and Oboe/AAudio on Android first; adapters for additional non-Apple platforms can follow.
 - **UI layer:** separate from the engine (for example Tauri, Qt or Flutter), reading a per-platform capability matrix so the app shows what each OS allows instead of promising parity.
 - **Network layer:** discovery, session tokens, Opus transport, clock sync.
 
@@ -93,6 +93,8 @@ A newer protocol called Sendspin appears to offer NTP-style clock sync, jitter b
 | Clock sync and timed playback | Snapcast-style approach, or reuse Snapcast |
 | Listener side | Android app, or a browser page for a quick test |
 
+The first prototype should implement Windows hosting and Android listening, but the wire protocol and session model should not assume that the host is always Windows. Android hosting and Windows listening can follow once the core synchronization behavior is validated.
+
 ## 5. Challenges and Solutions
 
 ### 5.1 Summary table
@@ -104,7 +106,7 @@ A newer protocol called Sendspin appears to offer NTP-style clock sync, jitter b
 | 3 | Wi-Fi jitter and packet loss | Medium | Jitter buffer, Opus loss concealment | Mostly |
 | 4 | Hotspot blocks device-to-device traffic | High | Test early, offer fallbacks | Depends on hardware |
 | 5 | Host cannot capture some audio | Medium | Loopback capture, accept DRM limits | Partly |
-| 6 | Phones pause audio in the background | High | Native app, foreground service | Mostly on Android, harder on iOS |
+| 6 | Phones pause audio in the background | High | Native app, foreground service | Mostly solvable on tested Android devices; other platforms require separate validation |
 | 7 | Video and audio out of sync | High | Music-first, delay-the-video helper | Partly |
 | 8 | Clock drift over time | Medium | Continuous correction by resampling | Yes |
 | 9 | Joining is too much effort | Medium | QR code, web fallback | Mostly |
@@ -158,15 +160,15 @@ You cannot fix isolation from inside the app, so this needs documentation and fa
 
 ### 5.6 Host cannot capture some audio
 
-**Problem:** capturing system audio is easy on Windows, harder on macOS, and restricted on Android. DRM-protected content may be blocked.
+**Problem:** capturing system audio is easiest on Windows and restricted on Android. DRM-protected content may be blocked. Apple platforms are out of scope.
 
-**Solution:** start with Windows loopback capture. Add macOS later. Tell users plainly which content may not work.
+**Solution:** start with Windows loopback capture and add Android hosting later. Tell users plainly which content may not work.
 
 ### 5.7 Phones pause audio in the background
 
 **Problem:** when the screen locks, browsers and apps get throttled. This is the biggest practical risk for a web-only version.
 
-**Solution:** use a native app, run playback as an Android foreground service with a media notification, and keep the web version for quick demos with a "keep the screen on" warning. iOS is stricter, so expect a weaker experience there at first.
+**Solution:** use a native app, run playback as an Android foreground service with a media notification, and keep the web version for quick demos with a "keep the screen on" warning. Apple devices are out of scope; each future non-Apple platform still requires its own background-playback validation.
 
 ### 5.8 Video and audio out of sync
 
@@ -227,31 +229,31 @@ You cannot fix isolation from inside the app, so this needs documentation and fa
 | Platform | As host | As listener |
 | --- | --- | --- |
 | Windows | Strong: loopback capture works without a driver | Possible, lower priority |
-| macOS | Possible with extra work (plug-in or screen capture permission) | Possible |
-| Android | Weak: capture restrictions, DRM blocks | Strong: foreground service, low-latency audio |
-| iOS | Very weak | Limited by background playback rules; browser option is weakest |
+| Other non-Apple platforms | Requires platform-specific investigation | Possible where background playback is supported |
+| Android | Possible but restricted: playback-capture consent and DRM limits | Strong: foreground service, low-latency audio |
+| Apple devices | Out of scope for the initial project | Out of scope for the initial project |
 
 ### 6.3 Overall verdict
 
-Without iOS, the project is feasible as **a Windows host streaming to Android listeners, for music**, with a one-time delay adjustment per pair of headphones. It is not feasible, today, as "any host, any listener, any content, zero setup". Feasible does not mean proven: a prototype is needed to confirm the hotspot, background-playback and Bluetooth assumptions.
+The project is feasible as **a non-Apple host/listener system for music**, with a Windows-host/Android-listener prototype as the first validation path. The long-term goal is for any supported non-Apple device to host or listen, but platform support must be added incrementally. It is not feasible, today, as "any host, any listener, any content, zero setup". Feasible does not mean proven: a prototype is needed to confirm hotspot connectivity, background playback and Bluetooth assumptions.
 
 ## 7. Assumptions Worth Challenging
 
 1. **"Minimal delay" conflicts with video and games.** To match a 200 ms Bluetooth device, everything else must be delayed, and video does not wait.
-2. **Identical behavior on every platform is unrealistic.** Android and iOS impose different limits on what an app can do.
+2. **Identical behavior on every platform is unrealistic.** Non-Apple operating systems still impose different limits on capture, networking and background playback.
 3. **"Minimal configuration" conflicts with Bluetooth unpredictability.** Calibration is the real user-experience challenge.
 4. **Hardware is probably premature.** Validate with software first.
 5. **Good-enough solutions already exist for the largest audience.** Samsung Dual Audio, Apple Share Audio and Auracast on newer devices cover many two-headphone cases, so the opportunity lies in the gaps outside those ecosystems.
 
 ## 8. Recommended MVP
 
-**Scope:** Windows host app plus Android listener app, music only.
+**Scope:** a non-Apple host/listener product, initially implemented as a Windows host app plus Android listener app, for music and general audio only.
 
 **Features:** capture system audio, encode with Opus, send to listeners, timestamped synchronized playback, manual per-listener delay slider, per-listener volume and mute, QR code joining.
 
-**Deliberately left out:** video sync, games, macOS, iOS, automatic calibration, equalizer matching.
+**Deliberately left out:** video sync, games, Apple devices, automatic calibration, equalizer matching.
 
-**Why this scope:** it targets the strongest platform on each side, and it tests the three assumptions that can break the idea: hotspot connectivity, background playback and Bluetooth variance.
+**Why this scope:** it targets the strongest first validation path while keeping the protocol role-neutral. It tests the three assumptions that can break the idea: hotspot connectivity, background playback and Bluetooth variance. Android hosting and additional non-Apple platforms are follow-on work, not prerequisites for proving the core concept.
 
 ## 9. Prototype Plan and Success Criteria
 
@@ -276,31 +278,24 @@ Connect different headphones to the phones and measure the offset needed for the
 | Background audio keeps dying | Prioritize a native Android app, or limit scope |
 | Bluetooth variance is too large to tune by hand | Invest in calibration, or reconsider the product |
 
-## 10. Users, Use Cases and Monetization
+## 10. Users, Use Cases and Project Motivation
 
 **Potential users:** friends or couples watching or listening together with separate headphones, silent-disco style events, gyms and cafes, travelers in hostels or on trains, classrooms, and small venues.
 
-**Monetization options:**
+This is currently a fun student engineering project rather than a business proposal. Its value is in solving a genuine everyday problem while exploring real-time audio capture, Opus encoding, local networking, clock synchronization, jitter buffering, Bluetooth delay compensation, background playback and cross-platform design. Monetization, market sizing and commercial positioning are intentionally out of scope until the technical prototype demonstrates that the experience is reliable and easy to use.
 
-- Freemium: a limited number of listeners free, more as a paid tier.
-- One-time license for the host app.
-- Venue or event licensing.
-- Licensing the sync engine to hardware or app makers.
+## 11. Project Risks and Future Product Risks
 
-Consumer willingness to pay is likely modest, so venue use may be more promising than casual use.
-
-## 11. Business Risks
-
-- **Native competition:** Auracast and phone-maker features (Samsung Dual Audio, Apple Share Audio) are making the problem standard on new devices.
+- **Native alternatives:** Auracast and phone-maker features are making some versions of the problem standard on newer devices.
 - **Setup friction:** requiring an app install and a hotspot on every device limits casual adoption.
 - **Support burden:** users will blame the app for Bluetooth physics and hotspot quirks.
 - **Platform changes:** capture permissions and background rules can tighten with OS updates.
-- **Shallow revenue:** a large audience does not guarantee that people will pay.
+- **Unproven product direction:** if this later becomes a product, a large audience would not guarantee willingness to pay.
 
 ## 12. Open Questions
 
-1. Which situation is the core: a few of your own devices, or other people joining with their own phones?
-2. Is this a business goal or a learning and portfolio project, and are you building solo?
+1. Is the first use case a few of your own devices, or other people joining with their own phones?
+2. Which non-Apple platforms should be supported after the first Windows/Android prototype?
 3. Which Android phones will you test with? Some brands kill background apps more aggressively than others.
 4. Which devices do you own (laptop model, headphones, speakers)? That decides what the first experiment can show.
 
@@ -310,3 +305,4 @@ Consumer willingness to pay is likely modest, so venue use may be more promising
 2. Run the Snapcast test and write down what you observe.
 3. Measure Bluetooth variance with the headphones you have.
 4. Decide, using the table in section 9, whether to build the custom MVP.
+5. Keep the network protocol host-neutral so a later Android host or other non-Apple host can use the same session model.

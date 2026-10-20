@@ -1,0 +1,9 @@
+[package]
+name = "audiosync-sim"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Offline host/listener simulation for AudioSync"
+
+[dependencies]
+audiosync-core = { path = "../core" }

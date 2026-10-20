@@ -1,0 +1,10 @@
+[package]
+name = "audiosync-core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Protocol and timing primitives for the AudioSync prototype"
+
+[lib]
+name = "audiosync_core"
+path = "src/lib.rs"
