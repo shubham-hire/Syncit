@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "native/core",
-    "native/sim",
+    "backend/native/core",
+    "backend/native/sim",
 ]
 resolver = "2"

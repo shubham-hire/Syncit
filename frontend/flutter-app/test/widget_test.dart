@@ -1,11 +1,11 @@
-import 'package:audiosync_app/main.dart';
+import 'package:audiosync_app/app.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('home presents host and listener roles', (tester) async {
-    await tester.pumpWidget(const AudioSyncApp());
+    await tester.pumpWidget(const SyncItApp());
 
-    expect(find.text('AudioSync'), findsOneWidget);
+    expect(find.text('SyncIt'), findsOneWidget);
     expect(find.text('Host a session'), findsOneWidget);
     expect(find.text('Listen to a session'), findsOneWidget);
   });
@@ -13,7 +13,7 @@ void main() {
   testWidgets('host can start a mock session and add a listener', (
     tester,
   ) async {
-    await tester.pumpWidget(const AudioSyncApp());
+    await tester.pumpWidget(const SyncItApp());
     await tester.tap(find.text('Create session'));
     await tester.pumpAndSettle();
 
@@ -36,7 +36,7 @@ void main() {
   });
 
   testWidgets('listener can join and adjust playback controls', (tester) async {
-    await tester.pumpWidget(const AudioSyncApp());
+    await tester.pumpWidget(const SyncItApp());
     await tester.tap(find.text('Join session'));
     await tester.pumpAndSettle();
 

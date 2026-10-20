@@ -1,5 +1,5 @@
 name: audiosync_app
-description: A local, non-Apple audio sharing prototype.
+description: SyncIt local, non-Apple audio sharing prototype.
 publish_to: "none"
 version: 0.1.0+1
 

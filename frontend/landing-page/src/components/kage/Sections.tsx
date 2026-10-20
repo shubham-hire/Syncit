@@ -49,6 +49,10 @@ export function Hero() {
               <ArrowIcon />
             </span>
           </a>
+          <a className="hero-download" href={downloadAction.href} rel="noreferrer" target="_blank">
+            <span>{downloadAction.label}</span>
+            <DownloadIcon />
+          </a>
         </div>
 
         <div className="hero-model-container">

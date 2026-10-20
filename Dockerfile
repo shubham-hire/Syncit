@@ -9,7 +9,7 @@ RUN apt-get update \
 RUN rustup component add rustfmt clippy
 
 COPY Cargo.toml Cargo.lock* rust-toolchain.toml Makefile ./
-COPY native ./native
+COPY backend ./backend
 
 RUN cargo test --workspace --locked
 

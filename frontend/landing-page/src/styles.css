@@ -474,6 +474,34 @@
   .hero-action {
     margin-top: 20px;
   }
+  .hero-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    margin: 10px 0 0 18px;
+    padding: 0 16px;
+    border: 1px solid var(--vermilion);
+    border-radius: 999px;
+    color: var(--paper);
+    background: var(--vermilion);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    box-shadow: 0 8px 20px color-mix(in oklch, var(--vermilion) 18%, transparent);
+    transition:
+      background 0.25s ease,
+      border-color 0.25s ease,
+      box-shadow 0.25s ease,
+      transform 0.25s var(--ease-out);
+  }
+  .hero-download:hover {
+    border-color: var(--ink);
+    background: var(--ink);
+    box-shadow: 0 10px 24px color-mix(in oklch, var(--ink) 18%, transparent);
+    transform: translateY(-2px);
+  }
   .hero-spacer {
     flex: 1 1 auto;
     min-height: 40px;
@@ -1159,6 +1187,10 @@
   }
   .hero-action {
     margin-top: 16px;
+  }
+  .hero-download {
+    margin-left: 0;
+    margin-top: 10px;
   }
   .hero-foot {
     padding-bottom: 28px;

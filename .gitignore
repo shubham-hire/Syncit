@@ -22,15 +22,15 @@ Desktop.ini
 # Flutter / Dart generated files
 # -----------------------------------------------------------------------------
 **/.dart_tool/
-app/build/
-app/.flutter-plugins
-app/.flutter-plugins-dependencies
-app/.packages
-app/linux/flutter/ephemeral/
-app/windows/flutter/ephemeral/
-app/android/.gradle/
-app/android/local.properties
-app/ios/Flutter/ephemeral/
+frontend/flutter-app/build/
+frontend/flutter-app/.flutter-plugins
+frontend/flutter-app/.flutter-plugins-dependencies
+frontend/flutter-app/.packages
+frontend/flutter-app/linux/flutter/ephemeral/
+frontend/flutter-app/windows/flutter/ephemeral/
+frontend/flutter-app/android/.gradle/
+frontend/flutter-app/android/local.properties
+frontend/flutter-app/ios/Flutter/ephemeral/
 
 # -----------------------------------------------------------------------------
 # Node, Bun, Vite, TanStack Start, and frontend build output

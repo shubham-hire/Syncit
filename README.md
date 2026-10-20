@@ -28,10 +28,12 @@ next integration milestones.
 ## Repository layout
 
 ```text
-app/                 Flutter application and widget tests
-Landing_page/        Static project landing page
-native/core/         Shared Rust protocol and timing primitives
-native/sim/          Offline host/listener simulation
+frontend/            User-facing applications
+  landing-page/      React/TanStack project landing page
+  flutter-app/       Flutter host/listener application and widget tests
+backend/             Native engine and simulation code
+  native/core/       Shared Rust protocol and timing primitives
+  native/sim/        Offline host/listener simulation
 PRD.md               Product requirements
 Dockerfile           Reproducible Rust simulator image
 Makefile             Common checks
@@ -48,11 +50,12 @@ Docker workflow below. The project keeps `Cargo.lock` committed.
 
 The pinned Flutter SDK is `3.47.7`, recorded in `.fvmrc`. The first Flutter
 platform scaffolding still needs to be generated on a machine with Flutter.
-The current environment does not have Flutter installed, so `app/android`,
-`app/windows` and `app/linux` are intentionally not checked in yet:
+The current environment does not have Flutter installed, so
+`frontend/flutter-app/android`, `frontend/flutter-app/windows` and
+`frontend/flutter-app/linux` are intentionally not checked in yet:
 
 ```bash
-cd app
+cd frontend/flutter-app
 flutter create --platforms=android,windows,linux .
 flutter pub get
 ```
@@ -79,7 +82,7 @@ AudioSync simulator PASS
 After generating the platform scaffolding:
 
 ```bash
-cd app
+cd frontend/flutter-app
 flutter pub get
 flutter run -d windows
 ```
@@ -109,6 +112,9 @@ Additional checks:
 make format-check
 make lint
 make build
+make test-landing
+make lint-landing
+make build-landing
 ```
 
 Hardware validation is separate from automated tests and requires a Windows
@@ -146,7 +152,7 @@ See `PRD.md` for product requirements and acceptance criteria.
 The landing page is a Vite/TanStack application. It supports npm and Bun:
 
 ```bash
-cd Landing_page
+cd frontend/landing-page
 npm install --legacy-peer-deps
 npm run dev
 ```
@@ -155,5 +161,5 @@ Then open the URL printed by Vite, normally
 [http://localhost:5173](http://localhost:5173).
 
 Alternatively, use Bun with `bun install --frozen-lockfile` and `bun run dev`.
-Do not open `Landing_page/code.html`; that file is not part of the current
+Do not open `frontend/landing-page/code.html`; that file is not part of the current
 application.

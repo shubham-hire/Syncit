@@ -18,11 +18,13 @@ Continue developing this project in the [Lovable editor](https://lovable.dev/pro
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+Prefer working locally? This project supports Node.js/npm and Bun. The
+repository keeps both lockfiles so use one package manager consistently for a
+given dependency change.
 
 ```sh
 git clone <this-repository-url>
-cd <repository-name>
-npm i
+cd <repository-name>/frontend/landing-page
+npm install --legacy-peer-deps --include=optional
 npm run dev
 ```
