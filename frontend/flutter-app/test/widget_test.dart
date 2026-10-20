@@ -1,4 +1,5 @@
 import 'package:audiosync_app/app.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -13,6 +14,11 @@ void main() {
   testWidgets('host can start a mock session and add a listener', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(const SyncItApp());
     await tester.tap(find.text('Create session'));
     await tester.pumpAndSettle();
@@ -36,6 +42,11 @@ void main() {
   });
 
   testWidgets('listener can join and adjust playback controls', (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(const SyncItApp());
     await tester.tap(find.text('Join session'));
     await tester.pumpAndSettle();
