@@ -1,0 +1,16 @@
+[package]
+name = "audiosync-audio"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "PCM sources and Opus encoding pipeline for AudioSync"
+
+[lib]
+name = "audiosync_audio"
+path = "src/lib.rs"
+
+[dependencies]
+audiosync-codec = { path = "../codec" }
+
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.26.0"

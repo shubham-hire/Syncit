@@ -19,13 +19,17 @@ The repository currently contains:
 - An NTP-style clock-offset estimator.
 - A bounded, reorder-aware jitter buffer.
 - A fixed 48 kHz mono Opus codec boundary with packet-loss concealment.
+- A PCM source and Opus encoding pipeline with a deterministic synthetic source.
+- A Windows WASAPI shared-mode loopback capture adapter that converts system
+  output to the codec's PCM contract.
 - A local UDP transport and host/listener session state machine.
 - An offline host/listener simulator.
 - A Flutter host/listener UI skeleton using mock session state, including mock
   host approval/removal and listener delay/volume controls.
 
-Real WASAPI capture and Android foreground playback are the next integration
-milestones.
+The WASAPI adapter is implemented but still needs hardware validation on a
+Windows host. Android foreground playback and the Flutter engine bridge remain
+future integration milestones.
 
 ## Repository layout
 
@@ -36,6 +40,7 @@ frontend/            User-facing applications
 backend/             Native engine and simulation code
   native/core/       Shared Rust protocol and timing primitives
   native/codec/      Fixed 48 kHz mono Opus frame boundary
+  native/audio/      PCM sources, synthetic regression source, and WASAPI loopback
   native/transport/  UDP transport and session-control messages
   native/session/    Host/listener state and clock synchronization
   native/sim/        Offline host/listener and packet-loss simulation
@@ -145,8 +150,8 @@ before running Flutter commands. The Makefile also accepts
 ## Development sequence
 
 1. Keep the protocol, session, and timing behavior tested in the offline simulator.
-2. Add Opus encoding and a synthetic end-to-end audio pipeline.
-3. Add Windows WASAPI loopback capture.
+2. Keep the synthetic PCM-to-Opus pipeline covered by the offline simulator.
+3. Validate Windows WASAPI loopback capture on the target host hardware.
 4. Add the Android foreground listener service.
 5. Validate synchronization and manual per-listener delay adjustment.
 6. Replace the Flutter mock session with the real engine bridge.

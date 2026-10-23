@@ -1,4 +1,5 @@
-use audiosync_codec::{DEFAULT_CODEC_CONFIG, FRAME_PCM_SAMPLES, OpusDecoder, OpusEncoder};
+use audiosync_audio::{OpusEncoderPipeline, SyntheticPcmSource};
+use audiosync_codec::{FRAME_PCM_SAMPLES, OpusDecoder};
 use audiosync_core::{AudioPacket, JitterBuffer, PushResult, SessionId};
 use audiosync_session::{
     HostSession, ListenerSession, ListenerState, SessionAction, SessionMetrics,
@@ -164,8 +165,9 @@ fn run_audio_scenario() -> AudioSimulationMetrics {
     let session_id: SessionId = [0x2A; 16];
     let mut buffer = JitterBuffer::new(8);
     buffer.start_at(0);
-    let mut encoder = OpusEncoder::new(DEFAULT_CODEC_CONFIG).expect("encoder should initialize");
-    let mut decoder = OpusDecoder::new(DEFAULT_CODEC_CONFIG).expect("decoder should initialize");
+    let source = SyntheticPcmSource::new(220.0);
+    let mut encoder = OpusEncoderPipeline::new(source).expect("synthetic source should initialize");
+    let mut decoder = OpusDecoder::new(encoder.config()).expect("decoder should initialize");
     let mut metrics = AudioSimulationMetrics::default();
 
     // The order models Wi-Fi reordering. Sequence 2 is lost and sequence 3 is
@@ -177,8 +179,9 @@ fn run_audio_scenario() -> AudioSimulationMetrics {
             continue;
         }
 
-        let pcm = sine_frame(220.0 + sequence as f32 * 20.0);
-        let opus_payload = encoder.encode(&pcm).expect("PCM frame should encode");
+        let opus_payload = encoder
+            .next_packet()
+            .expect("synthetic PCM frame should encode");
         let packet = AudioPacket::new(
             session_id,
             sequence,
@@ -227,16 +230,6 @@ fn run_audio_scenario() -> AudioSimulationMetrics {
     metrics
 }
 
-fn sine_frame(frequency_hz: f32) -> Vec<i16> {
-    (0..FRAME_PCM_SAMPLES)
-        .map(|sample| {
-            let phase = sample as f32 * frequency_hz * 2.0 * std::f32::consts::PI
-                / DEFAULT_CODEC_CONFIG.sample_rate_hz as f32;
-            (phase.sin() * 12_000.0) as i16
-        })
-        .collect()
-}
-
 fn run_udp_control_round_trip() {
     let receiver = UdpTransport::bind("127.0.0.1:0").expect("receiver should bind");
     receiver
@@ -263,4 +256,20 @@ fn run_udp_control_round_trip() {
         ControlMessage::decode(&received[..length]).expect("datagram should decode"),
         message
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn synthetic_audio_pipeline_remains_a_regression_scenario() {
+        let metrics = run_audio_scenario();
+
+        assert_eq!(metrics.rendered_frames, 4);
+        assert_eq!(metrics.concealed_frames, 1);
+        assert_eq!(metrics.network_dropped_packets, 1);
+        assert_eq!(metrics.duplicate_packets, 1);
+        assert_eq!(metrics.skipped_packets, 1);
+    }
 }

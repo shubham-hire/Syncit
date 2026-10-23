@@ -6,6 +6,7 @@ license = "MIT"
 description = "Offline host/listener simulation for AudioSync"
 
 [dependencies]
+audiosync-audio = { path = "../audio" }
 audiosync-codec = { path = "../codec" }
 audiosync-core = { path = "../core" }
 audiosync-session = { path = "../session" }

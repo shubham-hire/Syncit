@@ -8,12 +8,13 @@ session.
 ```text
 native/core/       Protocol, clock, and jitter-buffer primitives
 native/codec/      Fixed 48 kHz mono Opus frame boundary and PLC
+native/audio/      PCM source boundary, synthetic source, and Windows WASAPI loopback
 native/transport/  UDP sockets and versioned control messages
 native/session/    Deterministic host/listener state machines
 native/sim/        Offline host/listener and packet-loss simulation
 ```
 
-The root Cargo workspace owns all five crates. Run Rust commands from the
+The root Cargo workspace owns all six crates. Run Rust commands from the
 repository root:
 
 ```bash
@@ -27,6 +28,6 @@ into `audiosync-session`, sends returned outbound messages through
 `audiosync-transport`, and supplies monotonic timestamps for heartbeats, clock
 sync, and timeout decisions.
 
-Future Windows capture, Android playback, codec, and platform audio adapters
-should be added as explicit native modules rather than putting platform code in
-the protocol core or session state machine.
+Windows capture now lives in the explicit `native/audio` adapter rather than in
+the protocol core or session state machine. Android playback and additional
+platform audio adapters should follow the same boundary.

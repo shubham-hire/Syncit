@@ -2,6 +2,7 @@
 members = [
     "backend/native/core",
     "backend/native/codec",
+    "backend/native/audio",
     "backend/native/sim",
     "backend/native/transport",
     "backend/native/session",
