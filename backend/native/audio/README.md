@@ -36,3 +36,7 @@ let opus_packet = encoder.next_packet()?;
 On non-Windows targets the `WasapiCapture` type remains available for portable
 call sites, but construction returns an explicit unsupported-platform error.
 The Linux simulator and unit tests never require an audio device.
+
+For cloning the repository on Windows, running the current checks, and tracking
+the next live-capture steps, see
+[`WINDOWS_WASAPI_TESTING.md`](WINDOWS_WASAPI_TESTING.md).

@@ -29,7 +29,10 @@ The repository currently contains:
 
 The WASAPI adapter is implemented but still needs hardware validation on a
 Windows host. Android foreground playback and the Flutter engine bridge remain
-future integration milestones.
+future integration milestones. See
+`backend/native/audio/WINDOWS_WASAPI_TESTING.md` for the Windows setup,
+regression checks, current live-capture limitation, and next implementation
+plan.
 
 ## Repository layout
 
@@ -85,7 +88,7 @@ cargo run -p audiosync-sim --locked
 Expected output includes:
 
 ```text
-AudioSync simulator PASS
+SyncIt simulator PASS
 ```
 
 ## Run the Flutter prototype
@@ -130,6 +133,9 @@ make build-landing
 
 Hardware validation is separate from automated tests and requires a Windows
 machine, Android devices, a host hotspot and real audio outputs.
+
+For the current Windows WASAPI setup and testing plan, see
+`backend/native/audio/WINDOWS_WASAPI_TESTING.md`.
 
 ## Docker
 
