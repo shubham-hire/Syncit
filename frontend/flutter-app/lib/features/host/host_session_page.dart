@@ -50,16 +50,21 @@ class _HostSessionPageState extends State<HostSessionPage> {
             children: [
               StatusCard(
                 icon: _sessionStarted ? Icons.play_circle : Icons.pause_circle,
-                title: _sessionStarted ? 'Session is ready' : 'Session not started',
-                message: _sessionStarted
-                    ? 'Listeners can join using the session information below.'
-                    : 'Start a local session after enabling the host hotspot.',
-                action: _sessionStarted
-                    ? null
-                    : FilledButton(
-                        onPressed: _startSession,
-                        child: const Text('Start session'),
-                      ),
+                title:
+                    _sessionStarted
+                        ? 'Session is ready'
+                        : 'Session not started',
+                message:
+                    _sessionStarted
+                        ? 'Listeners can join using the session information below.'
+                        : 'Start a local session after enabling the host hotspot.',
+                action:
+                    _sessionStarted
+                        ? null
+                        : FilledButton(
+                          onPressed: _startSession,
+                          child: const Text('Start session'),
+                        ),
               ),
               const SizedBox(height: 16),
               const HotspotInstructions(),

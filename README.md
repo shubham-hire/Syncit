@@ -18,12 +18,14 @@ The repository currently contains:
 - A Rust workspace with versioned audio packet primitives.
 - An NTP-style clock-offset estimator.
 - A bounded, reorder-aware jitter buffer.
+- A fixed 48 kHz mono Opus codec boundary with packet-loss concealment.
+- A local UDP transport and host/listener session state machine.
 - An offline host/listener simulator.
 - A Flutter host/listener UI skeleton using mock session state, including mock
   host approval/removal and listener delay/volume controls.
 
-Real WASAPI capture, Opus transport and Android foreground playback are the
-next integration milestones.
+Real WASAPI capture and Android foreground playback are the next integration
+milestones.
 
 ## Repository layout
 
@@ -33,7 +35,10 @@ frontend/            User-facing applications
   flutter-app/       Flutter host/listener application and widget tests
 backend/             Native engine and simulation code
   native/core/       Shared Rust protocol and timing primitives
-  native/sim/        Offline host/listener simulation
+  native/codec/      Fixed 48 kHz mono Opus frame boundary
+  native/transport/  UDP transport and session-control messages
+  native/session/    Host/listener state and clock synchronization
+  native/sim/        Offline host/listener and packet-loss simulation
 PRD.md               Product requirements
 Dockerfile           Reproducible Rust simulator image
 Makefile             Common checks
@@ -44,13 +49,14 @@ Makefile             Common checks
 ### Rust core
 
 The pinned Rust toolchain is `1.99.1`. Use a local Rust installation or the
-Docker workflow below. The project keeps `Cargo.lock` committed.
+Docker workflow below. The Opus crate builds its vendored native library through
+CMake and a C compiler; the Dockerfile installs those build tools. The project
+keeps `Cargo.lock` committed.
 
 ### Flutter UI
 
 The pinned Flutter SDK is `3.47.7`, recorded in `.fvmrc`. The first Flutter
 platform scaffolding still needs to be generated on a machine with Flutter.
-The current environment does not have Flutter installed, so
 `frontend/flutter-app/android`, `frontend/flutter-app/windows` and
 `frontend/flutter-app/linux` are intentionally not checked in yet:
 
@@ -138,9 +144,9 @@ before running Flutter commands. The Makefile also accepts
 
 ## Development sequence
 
-1. Keep the protocol and timing behavior tested in the offline simulator.
-2. Add Windows WASAPI loopback capture.
-3. Add Opus encoding and real local-network transport.
+1. Keep the protocol, session, and timing behavior tested in the offline simulator.
+2. Add Opus encoding and a synthetic end-to-end audio pipeline.
+3. Add Windows WASAPI loopback capture.
 4. Add the Android foreground listener service.
 5. Validate synchronization and manual per-listener delay adjustment.
 6. Replace the Flutter mock session with the real engine bridge.

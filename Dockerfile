@@ -3,7 +3,12 @@ FROM rust:1.99.1-slim-bookworm
 WORKDIR /workspace
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates make \
+    && apt-get install --yes --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        cmake \
+        make \
+        pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup component add rustfmt clippy

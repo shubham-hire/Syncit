@@ -28,9 +28,9 @@ class PlaybackControls extends StatelessWidget {
           children: [
             Text(
               'Playback',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
             Row(

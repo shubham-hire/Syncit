@@ -1,0 +1,13 @@
+[package]
+name = "audiosync-codec"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Opus frame encoding and decoding for SyncIt"
+
+[lib]
+name = "audiosync_codec"
+path = "src/lib.rs"
+
+[dependencies]
+opus = "0.4.0"

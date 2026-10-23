@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
 class JoinForm extends StatelessWidget {
-  const JoinForm({required this.codeController, required this.onJoin, super.key});
+  const JoinForm({
+    required this.codeController,
+    required this.onJoin,
+    super.key,
+  });
 
   final TextEditingController codeController;
   final VoidCallback onJoin;
@@ -16,9 +20,9 @@ class JoinForm extends StatelessWidget {
           children: [
             Text(
               'Join a host',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             const Text(

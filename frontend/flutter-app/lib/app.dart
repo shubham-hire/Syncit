@@ -13,6 +13,9 @@ class SyncItApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB51F2B)),
         useMaterial3: true,
+        // InkSparkle's runtime shader is not available in every Flutter test
+        // engine, so use the portable ripple implementation for all targets.
+        splashFactory: InkRipple.splashFactory,
       ),
       home: const HomePage(),
     );

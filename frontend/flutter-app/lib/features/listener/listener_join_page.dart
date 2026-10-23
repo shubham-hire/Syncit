@@ -52,12 +52,14 @@ class _ListenerJoinPageState extends State<ListenerJoinPage> {
           child: ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              if (!_joined) JoinForm(codeController: _codeController, onJoin: _join),
+              if (!_joined)
+                JoinForm(codeController: _codeController, onJoin: _join),
               if (_joined) ...[
                 const StatusCard(
                   icon: Icons.check_circle,
                   title: 'Mock session connected',
-                  message: 'Playback controls are ready for the real listener engine.',
+                  message:
+                      'Playback controls are ready for the real listener engine.',
                 ),
                 const SizedBox(height: 16),
                 PlaybackControls(

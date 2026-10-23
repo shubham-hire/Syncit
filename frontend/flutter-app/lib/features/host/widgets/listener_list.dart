@@ -29,9 +29,9 @@ class ListenerList extends StatelessWidget {
               children: [
                 Text(
                   'Listeners',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 Text('${listeners.length}/5'),
               ],

@@ -15,9 +15,9 @@ class SessionCodeCard extends StatelessWidget {
           children: [
             Text(
               'Join information',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
             Container(

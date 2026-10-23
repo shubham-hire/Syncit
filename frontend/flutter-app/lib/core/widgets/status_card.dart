@@ -36,10 +36,7 @@ class StatusCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(message),
-                  if (action != null) ...[
-                    const SizedBox(height: 16),
-                    action!,
-                  ],
+                  if (action != null) ...[const SizedBox(height: 16), action!],
                 ],
               ),
             ),

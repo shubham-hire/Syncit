@@ -1,0 +1,13 @@
+[package]
+name = "audiosync-transport"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "UDP transport and local session-control protocol for AudioSync"
+
+[lib]
+name = "audiosync_transport"
+path = "src/lib.rs"
+
+[dependencies]
+audiosync-core = { path = "../core" }

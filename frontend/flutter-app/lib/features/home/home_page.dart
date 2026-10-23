@@ -43,7 +43,8 @@ class HomePage extends StatelessWidget {
                   RoleCard(
                     icon: Icons.wifi_tethering,
                     title: 'Host a session',
-                    description: 'Share audio from this device over its local Wi-Fi hotspot.',
+                    description:
+                        'Share audio from this device over its local Wi-Fi hotspot.',
                     buttonLabel: 'Create session',
                     onPressed: () {
                       Navigator.of(context).push(
@@ -57,7 +58,8 @@ class HomePage extends StatelessWidget {
                   RoleCard(
                     icon: Icons.headphones,
                     title: 'Listen to a session',
-                    description: 'Join a host and play the shared audio through this device.',
+                    description:
+                        'Join a host and play the shared audio through this device.',
                     buttonLabel: 'Join session',
                     onPressed: () {
                       Navigator.of(context).push(
