@@ -1,4 +1,4 @@
-# SyncIt Flutter application
+# AudioSync Flutter application
 
 This Flutter project contains the shared host/listener application UI.
 

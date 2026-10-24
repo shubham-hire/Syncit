@@ -103,7 +103,7 @@ cargo run -p audiosync-sim --locked
 Expected output includes:
 
 ```text
-SyncIt simulator PASS
+AudioSync simulator PASS
 ```
 
 ## Run the host and listener prototypes

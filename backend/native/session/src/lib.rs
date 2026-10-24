@@ -1,4 +1,4 @@
-//! Platform-neutral host and listener session state for SyncIt.
+//! Platform-neutral host and listener session state for AudioSync.
 //!
 //! The session layer deliberately does not own sockets, threads, or clocks.
 //! Callers feed decoded control messages into the state machines and send the

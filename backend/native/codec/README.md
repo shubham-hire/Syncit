@@ -1,4 +1,4 @@
-# SyncIt Opus codec
+# AudioSync Opus codec
 
 This crate owns the first audio-frame contract:
 

@@ -83,7 +83,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 The simulator should finish with output containing:
 
 ```text
-SyncIt simulator PASS
+AudioSync simulator PASS
 ```
 
 These checks cover:

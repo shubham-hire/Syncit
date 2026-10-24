@@ -1,8 +1,8 @@
-# SyncIt backend and native engine
+# AudioSync backend and native engine
 
 The backend area contains the platform-neutral Rust engine, local UDP transport,
 host/listener session state, and an offline simulator. It does not contain a
-cloud server or hosted API: SyncIt is local-first and the host device owns the
+cloud server or hosted API: AudioSync is local-first and the host device owns the
 session.
 
 ```text

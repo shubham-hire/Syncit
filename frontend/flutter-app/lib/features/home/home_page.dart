@@ -22,7 +22,7 @@ class HomePage extends StatelessWidget {
                 children: [
                   const SizedBox(height: 24),
                   Text(
-                    'SyncIt',
+                    'AudioSync',
                     style: Theme.of(context).textTheme.displaySmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),

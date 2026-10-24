@@ -4,9 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('home presents host and listener roles', (tester) async {
-    await tester.pumpWidget(const SyncItApp());
+    await tester.pumpWidget(const AudioSyncApp());
 
-    expect(find.text('SyncIt'), findsOneWidget);
+    expect(find.text('AudioSync'), findsOneWidget);
     expect(find.text('Host a session'), findsOneWidget);
     expect(find.text('Listen to a session'), findsOneWidget);
   });
@@ -19,7 +19,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(const SyncItApp());
+    await tester.pumpWidget(const AudioSyncApp());
     await tester.tap(find.text('Create session'));
     await tester.pumpAndSettle();
 
@@ -47,7 +47,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(const SyncItApp());
+    await tester.pumpWidget(const AudioSyncApp());
     await tester.tap(find.text('Join session'));
     await tester.pumpAndSettle();
 

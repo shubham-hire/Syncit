@@ -1,4 +1,4 @@
-# SyncIt audio sources
+# AudioSync audio sources
 
 This crate connects PCM producers to the stateful `OpusEncoder` without making
 the codec depend on an operating-system API.

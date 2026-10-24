@@ -3,7 +3,7 @@ name = "audiosync-session"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Deterministic host and listener session state for SyncIt"
+description = "Deterministic host and listener session state for AudioSync"
 
 [lib]
 name = "audiosync_session"

@@ -26,7 +26,7 @@ fn main() {
     run_udp_audio_fanout_round_trip();
 
     println!(
-        "SyncIt simulator PASS: active listeners {}, reconnects {}, timeouts {}, rendered {} frames, concealed {} frames, skipped {} packets, offset {} µs, RTT {} µs",
+        "AudioSync simulator PASS: active listeners {}, reconnects {}, timeouts {}, rendered {} frames, concealed {} frames, skipped {} packets, offset {} µs, RTT {} µs",
         session_metrics.active_listeners,
         session_metrics.reconnects,
         session_metrics.timeouts,

@@ -3,7 +3,7 @@ name = "audiosync-codec"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Opus frame encoding and decoding for SyncIt"
+description = "Opus frame encoding and decoding for AudioSync"
 
 [lib]
 name = "audiosync_codec"

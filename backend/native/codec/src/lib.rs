@@ -1,4 +1,4 @@
-//! Opus frame encoding and decoding for the SyncIt audio pipeline.
+//! Opus frame encoding and decoding for the AudioSync audio pipeline.
 //!
 //! The first codec milestone intentionally fixes one interoperable format:
 //! 48 kHz mono PCM, encoded as one 20 ms Opus frame per packet. Keeping the
@@ -8,7 +8,7 @@
 use opus::{Application, Bitrate, Channels, Decoder, Encoder};
 use std::fmt;
 
-/// The sample rate used by the first SyncIt audio format.
+/// The sample rate used by the first AudioSync audio format.
 pub const SAMPLE_RATE_HZ: u32 = 48_000;
 /// The number of PCM channels in the first audio format.
 pub const CHANNELS: usize = 1;
