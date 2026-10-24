@@ -5,18 +5,30 @@
 //! testable on every development machine before Windows and Android adapters
 //! are introduced.
 
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
-pub const PROTOCOL_VERSION: u8 = 1;
+pub const PROTOCOL_VERSION: u8 = 2;
 pub const AUDIO_PACKET_MAGIC: [u8; 4] = *b"ASAU";
 pub const MAX_AUDIO_PAYLOAD_BYTES: usize = 65_535;
 const AUDIO_PACKET_HEADER_LEN: usize = 4 + 1 + 1 + 16 + 4 + 8 + 4;
+/// Bytes of truncated HMAC-SHA256 carried at the end of every audio packet.
+pub const AUDIO_PACKET_TAG_BYTES: usize = 16;
+/// Key length for the per-session audio authentication token.
+pub const AUDIO_PACKET_TOKEN_BYTES: usize = 16;
 const CLOCK_SAMPLE_WINDOW: usize = 8;
 
 pub type SessionId = [u8; 16];
 
+type PacketMac = Hmac<Sha256>;
+
 /// An Opus audio frame together with the information needed to schedule it.
+///
+/// Version 2 appends a 16-byte truncated HMAC-SHA256 tag, keyed by the
+/// session token, over the whole datagram. Hosts sign every packet before
+/// sending; listeners drop datagrams whose tag does not verify.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AudioPacket {
     pub version: u8,
@@ -25,6 +37,7 @@ pub struct AudioPacket {
     pub sequence: u32,
     pub timestamp_micros: u64,
     pub payload: Vec<u8>,
+    auth_tag: [u8; AUDIO_PACKET_TAG_BYTES],
 }
 
 impl AudioPacket {
@@ -41,10 +54,47 @@ impl AudioPacket {
             sequence,
             timestamp_micros,
             payload,
+            auth_tag: [0; AUDIO_PACKET_TAG_BYTES],
         }
     }
 
-    /// Encode a packet using a small, versioned big-endian wire format.
+    /// Signs this packet in place with the per-session token.
+    ///
+    /// The tag covers the complete version-2 wire format (header and payload)
+    /// so sequence numbers, timestamps, and the session identity cannot be
+    /// tampered with independently.
+    pub fn sign(&mut self, token: &[u8; AUDIO_PACKET_TOKEN_BYTES]) {
+        self.auth_tag = [0; AUDIO_PACKET_TAG_BYTES];
+        let wire = self.encode().expect("a packet within limits can encode");
+        let mut mac = PacketMac::new_from_slice(token).expect("HMAC accepts a 16-byte key");
+        mac.update(&wire);
+        let digest = mac.finalize().into_bytes();
+        self.auth_tag
+            .copy_from_slice(&digest[..AUDIO_PACKET_TAG_BYTES]);
+    }
+
+    /// Whether this packet carries a non-zero authentication tag.
+    pub fn is_signed(&self) -> bool {
+        self.auth_tag != [0; AUDIO_PACKET_TAG_BYTES]
+    }
+
+    /// Verifies the authentication tag in constant time.
+    pub fn verify(&self, token: &[u8; AUDIO_PACKET_TOKEN_BYTES]) -> bool {
+        let mut unsigned = self.clone();
+        unsigned.auth_tag = [0; AUDIO_PACKET_TAG_BYTES];
+        let Ok(wire) = unsigned.encode() else {
+            return false;
+        };
+        let mut mac = PacketMac::new_from_slice(token).expect("HMAC accepts a 16-byte key");
+        mac.update(&wire);
+        let digest = mac.finalize().into_bytes();
+        let expected = &digest[..AUDIO_PACKET_TAG_BYTES];
+        use subtle::ConstantTimeEq;
+        expected.ct_eq(&self.auth_tag[..]).into()
+    }
+
+    /// Encode a packet using a small, versioned big-endian wire format with
+    /// the authentication tag appended.
     pub fn encode(&self) -> Result<Vec<u8>, PacketError> {
         if self.payload.len() > MAX_AUDIO_PAYLOAD_BYTES {
             return Err(PacketError::PayloadTooLarge {
@@ -53,7 +103,9 @@ impl AudioPacket {
             });
         }
 
-        let mut bytes = Vec::with_capacity(AUDIO_PACKET_HEADER_LEN + self.payload.len());
+        let mut bytes = Vec::with_capacity(
+            AUDIO_PACKET_HEADER_LEN + self.payload.len() + AUDIO_PACKET_TAG_BYTES,
+        );
         bytes.extend_from_slice(&AUDIO_PACKET_MAGIC);
         bytes.push(self.version);
         bytes.push(self.flags);
@@ -62,13 +114,15 @@ impl AudioPacket {
         bytes.extend_from_slice(&self.timestamp_micros.to_be_bytes());
         bytes.extend_from_slice(&(self.payload.len() as u32).to_be_bytes());
         bytes.extend_from_slice(&self.payload);
+        bytes.extend_from_slice(&self.auth_tag);
         Ok(bytes)
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self, PacketError> {
-        if bytes.len() < AUDIO_PACKET_HEADER_LEN {
+        let minimum = AUDIO_PACKET_HEADER_LEN + AUDIO_PACKET_TAG_BYTES;
+        if bytes.len() < minimum {
             return Err(PacketError::TooShort {
-                expected: AUDIO_PACKET_HEADER_LEN,
+                expected: minimum,
                 actual: bytes.len(),
             });
         }
@@ -99,6 +153,7 @@ impl AudioPacket {
         }
         let expected_len = AUDIO_PACKET_HEADER_LEN
             .checked_add(payload_len)
+            .and_then(|length| length.checked_add(AUDIO_PACKET_TAG_BYTES))
             .ok_or(PacketError::LengthOverflow)?;
 
         if bytes.len() != expected_len {
@@ -108,13 +163,17 @@ impl AudioPacket {
             });
         }
 
+        let mut auth_tag = [0_u8; AUDIO_PACKET_TAG_BYTES];
+        auth_tag.copy_from_slice(&bytes[expected_len - AUDIO_PACKET_TAG_BYTES..expected_len]);
+
         Ok(Self {
             version,
             flags,
             session_id,
             sequence,
             timestamp_micros,
-            payload: bytes[AUDIO_PACKET_HEADER_LEN..].to_vec(),
+            payload: bytes[AUDIO_PACKET_HEADER_LEN..expected_len - AUDIO_PACKET_TAG_BYTES].to_vec(),
+            auth_tag,
         })
     }
 }
@@ -398,6 +457,38 @@ mod tests {
         let packet = AudioPacket::new(session_id(), 42, 123_456, vec![1, 2, 3, 4]);
         let encoded = packet.encode().expect("small payload should encode");
         assert_eq!(AudioPacket::decode(&encoded), Ok(packet));
+    }
+
+    #[test]
+    fn audio_packet_signs_and_verifies_with_the_session_token() {
+        let token = [0x42_u8; AUDIO_PACKET_TOKEN_BYTES];
+        let wrong_token = [0x00_u8; AUDIO_PACKET_TOKEN_BYTES];
+        let mut packet = AudioPacket::new(session_id(), 7, 1_000, vec![1, 2, 3]);
+        assert!(!packet.is_signed());
+
+        packet.sign(&token);
+        assert!(packet.is_signed());
+
+        let encoded = packet.encode().expect("signed packet encodes");
+        let decoded = AudioPacket::decode(&encoded).expect("signed packet decodes");
+        assert!(decoded.verify(&token));
+        assert!(!decoded.verify(&wrong_token));
+
+        // Flipping the last tag byte keeps the packet parseable but breaks
+        // verification.
+        let mut tampered = encoded.clone();
+        let last = tampered.len() - 1;
+        tampered[last] ^= 0xFF;
+        let tampered = AudioPacket::decode(&tampered).expect("tampered packet still parses");
+        assert!(!tampered.verify(&token));
+
+        // Removing tag bytes is a length mismatch, not a verification event.
+        let mut truncated = encoded;
+        truncated.pop();
+        assert!(matches!(
+            AudioPacket::decode(&truncated),
+            Err(PacketError::LengthMismatch { .. })
+        ));
     }
 
     #[test]

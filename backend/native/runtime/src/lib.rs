@@ -133,7 +133,8 @@ impl<S: PcmSource> HostRuntime<S> {
     ) -> Result<Self, HostRuntimeError> {
         let transport = UdpTransport::bind(bind_addr)?;
         let session = HostSession::new(session_id, token, max_listeners);
-        let packet_pump = AudioPacketPump::new(source, session_id, capture_start_micros)?;
+        let packet_pump =
+            AudioPacketPump::new(source, session_id, *token.as_bytes(), capture_start_micros)?;
         Ok(Self {
             transport,
             session,
@@ -327,6 +328,7 @@ pub enum ListenerAudioError {
         actual: SessionId,
     },
     InvalidJitterCapacity,
+    UnauthenticatedPacket,
 }
 
 impl fmt::Display for ListenerAudioError {
@@ -341,6 +343,12 @@ impl fmt::Display for ListenerAudioError {
             Self::InvalidJitterCapacity => {
                 write!(formatter, "listener jitter capacity must be > 0")
             }
+            Self::UnauthenticatedPacket => {
+                write!(
+                    formatter,
+                    "audio packet failed session-token authentication"
+                )
+            }
         }
     }
 }
@@ -350,7 +358,9 @@ impl std::error::Error for ListenerAudioError {
         match self {
             Self::Packet(error) => Some(error),
             Self::Codec(error) => Some(error),
-            Self::WrongSession { .. } | Self::InvalidJitterCapacity => None,
+            Self::WrongSession { .. }
+            | Self::InvalidJitterCapacity
+            | Self::UnauthenticatedPacket => None,
         }
     }
 }
@@ -372,6 +382,7 @@ impl From<CodecError> for ListenerAudioError {
 pub struct ListenerAudioMetrics {
     pub received_packets: u64,
     pub invalid_packets: u64,
+    pub unauthenticated_packets: u64,
     pub wrong_session_packets: u64,
     pub inserted_packets: u64,
     pub duplicate_packets: u64,
@@ -449,6 +460,27 @@ impl ListenerAudioPipeline {
         self.ingest_packet(packet)
     }
 
+    /// Decodes and authenticates one datagram with the session token.
+    ///
+    /// Forged or foreign-session audio is counted and rejected without
+    /// touching the jitter buffer.
+    pub fn ingest_authenticated_datagram(
+        &mut self,
+        datagram: &[u8],
+        token: &[u8; 16],
+    ) -> Result<PushResult, ListenerAudioError> {
+        let packet = AudioPacket::decode(datagram).map_err(|error| {
+            self.metrics.invalid_packets = self.metrics.invalid_packets.saturating_add(1);
+            ListenerAudioError::Packet(error)
+        })?;
+        if !packet.verify(token) {
+            self.metrics.unauthenticated_packets =
+                self.metrics.unauthenticated_packets.saturating_add(1);
+            return Err(ListenerAudioError::UnauthenticatedPacket);
+        }
+        self.ingest_packet(packet)
+    }
+
     pub fn ingest_packet(&mut self, packet: AudioPacket) -> Result<PushResult, ListenerAudioError> {
         if packet.session_id != self.session_id {
             self.metrics.wrong_session_packets =
@@ -520,6 +552,7 @@ pub enum ListenerRuntimeError {
     },
     UnknownDatagram,
     UnexpectedControlDatagram,
+    UnauthenticatedPacket,
 }
 
 impl fmt::Display for ListenerRuntimeError {
@@ -544,6 +577,12 @@ impl fmt::Display for ListenerRuntimeError {
                     "listener expected audio but received a control datagram"
                 )
             }
+            Self::UnauthenticatedPacket => {
+                write!(
+                    formatter,
+                    "audio packet failed session-token authentication"
+                )
+            }
         }
     }
 }
@@ -555,9 +594,10 @@ impl std::error::Error for ListenerRuntimeError {
             Self::Audio(error) => Some(error),
             Self::Control(error) => Some(error),
             Self::Session(error) => Some(error),
-            Self::WrongPeer { .. } | Self::UnknownDatagram | Self::UnexpectedControlDatagram => {
-                None
-            }
+            Self::WrongPeer { .. }
+            | Self::UnknownDatagram
+            | Self::UnexpectedControlDatagram
+            | Self::UnauthenticatedPacket => None,
         }
     }
 }
@@ -649,6 +689,10 @@ impl ListenerRuntime {
         &self.session
     }
 
+    pub fn session_mut(&mut self) -> &mut ListenerSession {
+        &mut self.session
+    }
+
     pub fn send_join(&self) -> Result<(), ListenerRuntimeError> {
         self.send_action(self.session.join_action())
     }
@@ -693,9 +737,16 @@ impl ListenerRuntime {
             ));
         }
         if datagram.starts_with(&AUDIO_PACKET_MAGIC) {
-            return Ok(ListenerRuntimeEvent::Audio(
-                self.pipeline.ingest_datagram(&datagram)?,
-            ));
+            return self
+                .pipeline
+                .ingest_authenticated_datagram(&datagram, self.session.token().as_bytes())
+                .map(ListenerRuntimeEvent::Audio)
+                .map_err(|error| match error {
+                    ListenerAudioError::UnauthenticatedPacket => {
+                        ListenerRuntimeError::UnauthenticatedPacket
+                    }
+                    other => ListenerRuntimeError::Audio(other),
+                });
         }
         Err(ListenerRuntimeError::UnknownDatagram)
     }
@@ -984,8 +1035,13 @@ mod tests {
 
     #[test]
     fn listener_pipeline_reorders_and_conceals_a_missing_frame() {
-        let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(330.0), session_id(), 0)
-            .expect("synthetic source should initialize");
+        let mut pump = AudioPacketPump::new(
+            SyntheticPcmSource::new(330.0),
+            session_id(),
+            token().into_bytes(),
+            0,
+        )
+        .expect("synthetic source should initialize");
         let first = pump.next_packet().expect("first packet should encode");
         let missing = pump.next_packet().expect("missing packet should encode");
         let later = pump.next_packet().expect("later packet should encode");
@@ -1062,6 +1118,43 @@ mod tests {
     }
 
     #[test]
+    fn listener_rejects_audio_signed_with_the_wrong_token() {
+        let session_id = session_id();
+        let sender = UdpTransport::bind("127.0.0.1:0").expect("sender binds");
+        let mut listener = ListenerRuntime::new(
+            "127.0.0.1:0",
+            session_id,
+            token(),
+            sender.local_addr().expect("sender has an address"),
+            CodecConfig::default(),
+            4,
+        )
+        .expect("listener runtime should bind");
+        listener
+            .set_read_timeout(Some(Duration::from_millis(250)))
+            .expect("listener timeout should be configured");
+
+        // Signed with a foreign token but carrying this session's identity.
+        let mut pump =
+            AudioPacketPump::new(SyntheticPcmSource::new(440.0), session_id, [0xEE; 16], 0)
+                .expect("forging pump should initialize");
+        let forged = pump.next_packet().expect("forged packet should encode");
+        sender
+            .send_to(
+                &forged.encode().expect("forged packet encodes"),
+                listener.local_addr().expect("listener has an address"),
+            )
+            .expect("forged packet sends");
+
+        assert!(matches!(
+            listener.receive_audio_once(),
+            Err(ListenerRuntimeError::UnauthenticatedPacket)
+        ));
+        assert_eq!(listener.pipeline().metrics().unauthenticated_packets, 1);
+        assert_eq!(listener.pipeline().metrics().received_packets, 0);
+    }
+
+    #[test]
     fn listener_runtime_receives_and_decodes_a_udp_audio_packet() {
         let session_id = session_id();
         let sender = UdpTransport::bind("127.0.0.1:0").expect("sender should bind");
@@ -1077,8 +1170,13 @@ mod tests {
         listener
             .set_read_timeout(Some(Duration::from_millis(250)))
             .expect("listener timeout should be configured");
-        let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(440.0), session_id, 0)
-            .expect("packet pump should initialize");
+        let mut pump = AudioPacketPump::new(
+            SyntheticPcmSource::new(440.0),
+            session_id,
+            token().into_bytes(),
+            0,
+        )
+        .expect("packet pump should initialize");
         let packet = pump.next_packet().expect("packet should encode");
         let encoded = packet.encode().expect("packet should serialize");
         sender
@@ -1126,8 +1224,13 @@ mod tests {
             .expect("listener timeout should be configured");
         let destination = listener.local_addr().expect("listener has an address");
         let fanout = AudioPacketFanout::new(&sender);
-        let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(220.0), session_id, 2_000_000)
-            .expect("packet pump should initialize");
+        let mut pump = AudioPacketPump::new(
+            SyntheticPcmSource::new(220.0),
+            session_id,
+            token().into_bytes(),
+            2_000_000,
+        )
+        .expect("packet pump should initialize");
 
         for expected_sequence in 0..500_u32 {
             let packet = pump.next_packet().expect("synthetic packet should encode");

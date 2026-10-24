@@ -164,9 +164,10 @@ fn outbound_message(action: SessionAction) -> ControlMessage {
 
 fn run_audio_scenario() -> AudioSimulationMetrics {
     let session_id: SessionId = [0x2A; 16];
+    let token_bytes = SessionToken::new([0x7F; 16]).into_bytes();
     let mut buffer = JitterBuffer::new(8);
     buffer.start_at(0);
-    let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(220.0), session_id, 0)
+    let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(220.0), session_id, token_bytes, 0)
         .expect("synthetic source should initialize");
     let mut decoder = OpusDecoder::new(pump.config()).expect("decoder should initialize");
     let mut metrics = AudioSimulationMetrics::default();
@@ -194,6 +195,10 @@ fn run_audio_scenario() -> AudioSimulationMetrics {
         let packet = source_packets[sequence as usize].clone();
         let encoded = packet.encode().expect("simulated packet is valid");
         let decoded = AudioPacket::decode(&encoded).expect("simulated packet is valid");
+        assert!(
+            decoded.verify(&token_bytes),
+            "delivered packet must authenticate"
+        );
         metrics.delivered_packets += 1;
         match buffer.push(decoded.sequence, decoded.payload) {
             PushResult::Duplicate => metrics.duplicate_packets += 1,
@@ -274,8 +279,13 @@ fn run_udp_audio_fanout_round_trip() {
 
     let sender = UdpTransport::bind("127.0.0.1:0").expect("audio sender should bind");
     let session_id: SessionId = [0x2A; 16];
-    let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(330.0), session_id, 5_000_000)
-        .expect("synthetic audio packet pump should initialize");
+    let mut pump = AudioPacketPump::new(
+        SyntheticPcmSource::new(330.0),
+        session_id,
+        SessionToken::new([0x7F; 16]).into_bytes(),
+        5_000_000,
+    )
+    .expect("synthetic audio packet pump should initialize");
     let fanout = AudioPacketFanout::new(&sender);
     let destinations = [
         receiver_a

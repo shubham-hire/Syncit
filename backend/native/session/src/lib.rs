@@ -778,6 +778,24 @@ impl ListenerSession {
         self.state
     }
 
+    /// Marks the listener as timed out after losing contact with the host.
+    ///
+    /// Terminal host decisions (`Removed`, `SessionEnded`) are preserved.
+    /// Returns the previous state when a transition happened, so callers can
+    /// surface a `StateChanged` event.
+    pub fn mark_timed_out(&mut self) -> Option<ListenerState> {
+        if matches!(
+            self.state,
+            ListenerState::Removed | ListenerState::SessionEnded | ListenerState::TimedOut
+        ) {
+            return None;
+        }
+        let previous = self.state;
+        self.state = ListenerState::TimedOut;
+        self.metrics.active_listeners = 0;
+        Some(previous)
+    }
+
     pub fn metrics(&self) -> &SessionMetrics {
         &self.metrics
     }
@@ -1276,6 +1294,24 @@ mod tests {
             .handle_message(host_endpoint, outbound_message(&removal), None)
             .expect("listener accepts removal");
         assert_eq!(listener.state(), ListenerState::Removed);
+    }
+
+    #[test]
+    fn listener_watchdog_marks_timeout_and_preserves_terminal_states() {
+        let mut listener = ListenerSession::new(session_id(), token(), host_endpoint());
+
+        // Disconnected listener loses the host before joining completes.
+        assert_eq!(listener.mark_timed_out(), Some(ListenerState::Disconnected));
+        assert_eq!(listener.state(), ListenerState::TimedOut);
+        // Repeated timeouts do not repeat the transition.
+        assert_eq!(listener.mark_timed_out(), None);
+
+        // A removed listener keeps the host's terminal decision.
+        let mut removed = ListenerSession::new(session_id(), token(), host_endpoint());
+        removed.listener_id = Some(ListenerId::new([9; 16]));
+        removed.state = ListenerState::Removed;
+        assert_eq!(removed.mark_timed_out(), None);
+        assert_eq!(removed.state(), ListenerState::Removed);
     }
 
     #[test]

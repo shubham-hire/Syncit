@@ -84,6 +84,14 @@ pub struct PlaybackConfig {
     pub clock_sync_period: Duration,
     /// Upper bound on datagrams drained per pump call.
     pub drain_limit: usize,
+    /// Silence from the host for this long marks the session timed out.
+    pub host_loss_timeout: Duration,
+    /// First delay before an automatic rejoin attempt after a timeout.
+    pub rejoin_backoff_start: Duration,
+    /// Upper bound on the rejoin backoff (PRD target: recovery within ~2 s).
+    pub rejoin_backoff_max: Duration,
+    /// Whether the scheduler re-joins automatically after a watchdog timeout.
+    pub auto_rejoin: bool,
 }
 
 impl Default for PlaybackConfig {
@@ -96,6 +104,10 @@ impl Default for PlaybackConfig {
             heartbeat_period: Duration::from_secs(1),
             clock_sync_period: Duration::from_secs(2),
             drain_limit: 64,
+            host_loss_timeout: Duration::from_secs(3),
+            rejoin_backoff_start: Duration::from_millis(400),
+            rejoin_backoff_max: Duration::from_secs(2),
+            auto_rejoin: true,
         }
     }
 }
@@ -106,6 +118,8 @@ pub struct PlaybackStats {
     pub rendered_frames: u64,
     pub concealed_frames: u64,
     pub sink_failures: u64,
+    pub watchdog_timeouts: u64,
+    pub rejoin_attempts: u64,
 }
 
 /// Paces one [`ListenerRuntime`] against wall-clock time.
@@ -117,6 +131,9 @@ pub struct PlaybackScheduler {
     next_clock_sync: Instant,
     control_events: Vec<SessionEvent>,
     stats: PlaybackStats,
+    last_host_traffic: Instant,
+    next_rejoin_at: Option<Instant>,
+    rejoin_backoff: Duration,
 }
 
 impl PlaybackScheduler {
@@ -129,6 +146,9 @@ impl PlaybackScheduler {
             next_clock_sync: now + config.clock_sync_period,
             control_events: Vec::new(),
             stats: PlaybackStats::default(),
+            last_host_traffic: now,
+            next_rejoin_at: None,
+            rejoin_backoff: config.rejoin_backoff_start,
         }
     }
 
@@ -150,6 +170,7 @@ impl PlaybackScheduler {
     ) -> Result<PlaybackStats, PlaybackError> {
         self.drain_socket(runtime)?;
         self.keep_session_cadence(runtime);
+        self.run_watchdog(runtime);
 
         loop {
             let now = Instant::now();
@@ -206,8 +227,11 @@ impl PlaybackScheduler {
             // lowest-RTT filter naturally discards.
             let client_received_micros = monotonic_micros();
             match runtime.receive_once(Some(client_received_micros)) {
-                Ok(ListenerRuntimeEvent::Audio(_)) => {}
+                Ok(ListenerRuntimeEvent::Audio(_)) => {
+                    self.last_host_traffic = Instant::now();
+                }
                 Ok(ListenerRuntimeEvent::Control(events)) => {
+                    self.last_host_traffic = Instant::now();
                     if self.control_events.len() < 1_024 {
                         self.control_events.extend(events);
                     }
@@ -220,10 +244,60 @@ impl PlaybackScheduler {
                 {
                     return Ok(());
                 }
+                // Already counted by the pipeline metric; forged traffic must
+                // not interrupt playback.
+                Err(ListenerRuntimeError::UnauthenticatedPacket) => return Ok(()),
                 Err(error) => return Err(error.into()),
             }
         }
         Ok(())
+    }
+
+    /// Watchdog: mark the session timed out after sustained host silence,
+    /// then attempt an automatic rejoin on a capped backoff. Any host traffic
+    /// resets the backoff, so a listener that re-establishes contact quickly
+    /// retries fast the next time.
+    fn run_watchdog(&mut self, runtime: &mut ListenerRuntime) {
+        use audiosync_session::ListenerState;
+
+        let state = runtime.session().state();
+        match state {
+            ListenerState::TimedOut => {
+                if !self.config.auto_rejoin {
+                    return;
+                }
+                let Some(not_before) = self.next_rejoin_at else {
+                    self.next_rejoin_at = Some(Instant::now());
+                    return;
+                };
+                if Instant::now() >= not_before && runtime.send_join().is_ok() {
+                    self.stats.rejoin_attempts = self.stats.rejoin_attempts.saturating_add(1);
+                    self.rejoin_backoff =
+                        (self.rejoin_backoff * 2).min(self.config.rejoin_backoff_max);
+                    self.next_rejoin_at = Some(Instant::now() + self.rejoin_backoff);
+                }
+            }
+            ListenerState::Disconnected | ListenerState::Rejected => {}
+            ListenerState::PendingApproval | ListenerState::Active => {
+                if Instant::now() >= self.last_host_traffic + self.config.host_loss_timeout
+                    && runtime.session_mut().mark_timed_out().is_some()
+                {
+                    self.stats.watchdog_timeouts = self.stats.watchdog_timeouts.saturating_add(1);
+                    self.rejoin_backoff = self.config.rejoin_backoff_start;
+                    self.next_rejoin_at = Some(Instant::now());
+                    self.push_event(SessionEvent::StateChanged(ListenerState::TimedOut));
+                }
+            }
+            ListenerState::Removed | ListenerState::SessionEnded => {
+                self.next_rejoin_at = None;
+            }
+        }
+    }
+
+    fn push_event(&mut self, event: SessionEvent) {
+        if self.control_events.len() < 1_024 {
+            self.control_events.push(event);
+        }
     }
 
     fn keep_session_cadence(&mut self, runtime: &mut ListenerRuntime) {
@@ -253,7 +327,8 @@ mod tests {
     use super::*;
     use audiosync_audio::{AudioPacketPump, SyntheticPcmSource};
     use audiosync_codec::CodecConfig;
-    use audiosync_transport::{SessionToken, UdpTransport};
+    use audiosync_session::ListenerState;
+    use audiosync_transport::{ControlMessage, ListenerId, SessionToken, UdpTransport};
 
     fn session_id() -> audiosync_core::SessionId {
         [0x91; 16]
@@ -290,8 +365,13 @@ mod tests {
             .expect("listener timeout configures");
 
         let destination = listener.local_addr().expect("listener address");
-        let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(440.0), session_id(), 0)
-            .expect("pump initializes");
+        let mut pump = AudioPacketPump::new(
+            SyntheticPcmSource::new(440.0),
+            session_id(),
+            token().into_bytes(),
+            0,
+        )
+        .expect("pump initializes");
         for _ in 0..5 {
             let packet = pump.next_packet().expect("packet encodes");
             send_packet(&sender, &packet, destination);
@@ -313,6 +393,87 @@ mod tests {
     }
 
     #[test]
+    fn watchdog_marks_timeout_and_rejoins_automatically() {
+        let host_socket = UdpTransport::bind("127.0.0.1:0").expect("fake host binds");
+        let host_endpoint = host_socket.local_addr().expect("fake host address");
+        let mut listener = ListenerRuntime::new(
+            "127.0.0.1:0",
+            session_id(),
+            token(),
+            host_endpoint,
+            CodecConfig::default(),
+            8,
+        )
+        .expect("listener runtime initializes");
+        listener
+            .set_read_timeout(Some(Duration::from_millis(2)))
+            .expect("listener timeout configures");
+
+        // Reach Active without a real host by feeding the session directly.
+        let listener_id = ListenerId::new([0x07; 16]);
+        {
+            let session = listener.session_mut();
+            let _ = session.handle_message(
+                host_endpoint,
+                ControlMessage::JoinAccepted {
+                    session_id: session_id(),
+                    listener_id,
+                },
+                None,
+            );
+            let _ = session.handle_message(
+                host_endpoint,
+                ControlMessage::ListenerApproved {
+                    session_id: session_id(),
+                    listener_id,
+                },
+                None,
+            );
+        }
+        assert_eq!(listener.session().state(), ListenerState::Active);
+
+        let mut scheduler = PlaybackScheduler::new(PlaybackConfig {
+            host_loss_timeout: Duration::from_millis(150),
+            rejoin_backoff_start: Duration::from_millis(50),
+            rejoin_backoff_max: Duration::from_millis(200),
+            ..PlaybackConfig::default()
+        });
+        let mut sink = NullSink::default();
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while listener.session().state() == ListenerState::Active && Instant::now() < deadline {
+            let _ = scheduler.pump(&mut listener, &mut sink);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(listener.session().state(), ListenerState::TimedOut);
+        assert_eq!(scheduler.stats().watchdog_timeouts, 1);
+
+        // Keep pumping until the automatic rejoin fires.
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while scheduler.stats().rejoin_attempts < 1 && Instant::now() < deadline {
+            let _ = scheduler.pump(&mut listener, &mut sink);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(scheduler.stats().rejoin_attempts >= 1);
+
+        // The rejoin reaches the (fake) host as a JoinRequest.
+        host_socket
+            .set_read_timeout(Some(Duration::from_millis(500)))
+            .expect("fake host timeout configures");
+        let mut buffer = [0_u8; 1_024];
+        let (length, source) = host_socket
+            .recv_from(&mut buffer)
+            .expect("rejoin join request arrives");
+        assert_eq!(
+            source,
+            listener.local_addr().expect("listener has an address")
+        );
+        let message = ControlMessage::decode(&buffer[..length]).expect("rejoin decodes");
+        assert!(matches!(message, ControlMessage::JoinRequest { .. }));
+        assert!(scheduler.stats().rejoin_attempts >= 1);
+    }
+
+    #[test]
     fn scheduler_conceals_a_missing_frame_after_the_grace_window() {
         let sender = UdpTransport::bind("127.0.0.1:0").expect("sender binds");
         let mut listener = ListenerRuntime::new(
@@ -329,8 +490,13 @@ mod tests {
             .expect("listener timeout configures");
 
         let destination = listener.local_addr().expect("listener address");
-        let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(330.0), session_id(), 0)
-            .expect("pump initializes");
+        let mut pump = AudioPacketPump::new(
+            SyntheticPcmSource::new(330.0),
+            session_id(),
+            token().into_bytes(),
+            0,
+        )
+        .expect("pump initializes");
         // Generate sequences 0..3, then deliver all except sequence 1.
         let mut packets = Vec::new();
         for _ in 0..3 {

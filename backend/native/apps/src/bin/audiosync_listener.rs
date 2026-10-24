@@ -143,12 +143,13 @@ fn run() -> Result<(), CliError> {
             let rate = rendered.saturating_sub(last_rendered);
             last_rendered = rendered;
             println!(
-                "state {:?} | rendered {rendered} (+{rate}/s) concealed {} | recv {} dup {} late {} | buffered {} | rtt {} µs offset {} µs",
+                "state {:?} | rendered {rendered} (+{rate}/s) concealed {} | recv {} dup {} late {} forger {} | buffered {} | rtt {} µs offset {} µs",
                 session.state(),
                 playback.concealed_frames,
                 pipeline.received_packets,
                 pipeline.duplicate_packets,
                 pipeline.too_late_packets,
+                pipeline.unauthenticated_packets,
                 runtime.pipeline().buffered_packets(),
                 session
                     .best_round_trip_micros()
@@ -194,7 +195,7 @@ fn print_final_report(runtime: &ListenerRuntime, scheduler: &PlaybackScheduler) 
     let playback = scheduler.stats();
     let pipeline = runtime.pipeline().metrics();
     println!(
-        "final: rendered {} concealed {} | received {} invalid {} wrong-session {} dup {} late {} capacity-drops {} | rtt {} µs offset {} µs",
+        "final: rendered {} concealed {} | received {} invalid {} wrong-session {} dup {} late {} capacity-drops {} unauthenticated {} | rtt {} µs offset {} µs",
         playback.rendered_frames,
         playback.concealed_frames,
         pipeline.received_packets,
@@ -203,6 +204,7 @@ fn print_final_report(runtime: &ListenerRuntime, scheduler: &PlaybackScheduler) 
         pipeline.duplicate_packets,
         pipeline.too_late_packets,
         pipeline.capacity_drops,
+        pipeline.unauthenticated_packets,
         runtime
             .session()
             .best_round_trip_micros()

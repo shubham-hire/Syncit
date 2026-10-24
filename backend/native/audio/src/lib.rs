@@ -187,6 +187,7 @@ impl From<AudioPipelineError> for AudioPacketPumpError {
 pub struct AudioPacketPump<S> {
     pipeline: OpusEncoderPipeline<S>,
     session_id: SessionId,
+    token: [u8; 16],
     capture_start_micros: u64,
     frame_duration_micros: u64,
     next_sequence: u32,
@@ -194,16 +195,19 @@ pub struct AudioPacketPump<S> {
 }
 
 impl<S: PcmSource> AudioPacketPump<S> {
-    /// Creates a packet pump from a PCM source and a stream start timestamp.
+    /// Creates a packet pump from a PCM source, the session identity, and the
+    /// per-session token used to authenticate every outgoing packet.
     pub fn new(
         source: S,
         session_id: SessionId,
+        token: [u8; 16],
         capture_start_micros: u64,
     ) -> Result<Self, AudioPacketPumpError> {
         let pipeline = OpusEncoderPipeline::new(source)?;
         Ok(Self::from_pipeline(
             pipeline,
             session_id,
+            token,
             capture_start_micros,
         ))
     }
@@ -212,6 +216,7 @@ impl<S: PcmSource> AudioPacketPump<S> {
     pub fn from_pipeline(
         pipeline: OpusEncoderPipeline<S>,
         session_id: SessionId,
+        token: [u8; 16],
         capture_start_micros: u64,
     ) -> Self {
         let frame_duration_micros =
@@ -219,6 +224,7 @@ impl<S: PcmSource> AudioPacketPump<S> {
         Self {
             pipeline,
             session_id,
+            token,
             capture_start_micros,
             frame_duration_micros,
             next_sequence: 0,
@@ -276,12 +282,13 @@ impl<S: PcmSource> AudioPacketPump<S> {
             .checked_add(1)
             .ok_or(AudioPacketPumpError::FrameIndexOverflow)?;
         let payload = self.pipeline.next_packet()?;
-        let packet = AudioPacket::new(
+        let mut packet = AudioPacket::new(
             self.session_id,
             self.next_sequence,
             timestamp_micros,
             payload,
         );
+        packet.sign(&self.token);
         self.next_sequence = self.next_sequence.wrapping_add(1);
         self.frame_index = next_frame_index;
         Ok(packet)
@@ -420,8 +427,13 @@ mod tests {
     #[test]
     fn packet_pump_assigns_contiguous_sequence_and_timestamp_values() {
         let session_id = [0x42; 16];
-        let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(220.0), session_id, 1_000_000)
-            .expect("synthetic source should initialize");
+        let mut pump = AudioPacketPump::new(
+            SyntheticPcmSource::new(220.0),
+            session_id,
+            [0x5A; 16],
+            1_000_000,
+        )
+        .expect("synthetic source should initialize");
 
         let first = pump.next_packet().expect("first packet should encode");
         let second = pump.next_packet().expect("second packet should encode");
@@ -440,8 +452,13 @@ mod tests {
 
     #[test]
     fn packet_pump_reports_timestamp_overflow_before_reading_another_frame() {
-        let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(220.0), [0x11; 16], u64::MAX)
-            .expect("synthetic source should initialize");
+        let mut pump = AudioPacketPump::new(
+            SyntheticPcmSource::new(220.0),
+            [0x11; 16],
+            [0x22; 16],
+            u64::MAX,
+        )
+        .expect("synthetic source should initialize");
 
         pump.next_packet()
             .expect("the first frame can use the maximum timestamp");

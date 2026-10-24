@@ -8,3 +8,8 @@ description = "Protocol and timing primitives for the AudioSync prototype"
 [lib]
 name = "audiosync_core"
 path = "src/lib.rs"
+
+[dependencies]
+hmac = "0.12"
+sha2 = "0.10"
+subtle = "2"
