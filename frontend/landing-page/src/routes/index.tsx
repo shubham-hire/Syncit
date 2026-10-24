@@ -9,6 +9,7 @@ import {
   ReceiversSection,
   SiteFooter,
 } from "@/components/kage/Sections";
+import { useReveal } from "@/components/kage/use-reveal";
 
 const TITLE = "SyncIt — Local Audio Sharing Prototype";
 const DESCRIPTION =
@@ -29,6 +30,8 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  useReveal();
+
   return (
     <>
       <KageScene />
