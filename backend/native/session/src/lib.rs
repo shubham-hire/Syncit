@@ -270,6 +270,21 @@ impl HostSession {
             .map(|listener| listener.endpoint)
     }
 
+    /// Returns the endpoints that currently have permission to receive audio.
+    ///
+    /// The returned list is sorted to keep runtime fan-out and tests
+    /// deterministic even though the host stores listeners in a hash map.
+    pub fn active_listener_endpoints(&self) -> Vec<SocketAddr> {
+        let mut endpoints: Vec<SocketAddr> = self
+            .listeners
+            .values()
+            .filter(|listener| listener.state == HostListenerState::Active)
+            .map(|listener| listener.endpoint)
+            .collect();
+        endpoints.sort_unstable();
+        endpoints
+    }
+
     /// Handles a decoded message received from a UDP endpoint.
     ///
     /// Clock-sync requests are recorded and surfaced as an event. Callers that

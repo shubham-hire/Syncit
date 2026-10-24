@@ -6,5 +6,6 @@ members = [
     "backend/native/sim",
     "backend/native/transport",
     "backend/native/session",
+    "backend/native/runtime",
 ]
 resolver = "2"

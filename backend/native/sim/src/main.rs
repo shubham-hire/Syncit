@@ -1,10 +1,10 @@
-use audiosync_audio::{OpusEncoderPipeline, SyntheticPcmSource};
+use audiosync_audio::{AudioPacketPump, SyntheticPcmSource};
 use audiosync_codec::{FRAME_PCM_SAMPLES, OpusDecoder};
 use audiosync_core::{AudioPacket, JitterBuffer, PushResult, SessionId};
 use audiosync_session::{
     HostSession, ListenerSession, ListenerState, SessionAction, SessionMetrics,
 };
-use audiosync_transport::{ControlMessage, SessionToken, UdpTransport};
+use audiosync_transport::{AudioPacketFanout, ControlMessage, SessionToken, UdpTransport};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
@@ -23,6 +23,7 @@ fn main() {
     let session_metrics = run_session_scenario();
     let audio_metrics = run_audio_scenario();
     run_udp_control_round_trip();
+    run_udp_audio_fanout_round_trip();
 
     println!(
         "SyncIt simulator PASS: active listeners {}, reconnects {}, timeouts {}, rendered {} frames, concealed {} frames, skipped {} packets, offset {} µs, RTT {} µs",
@@ -165,10 +166,21 @@ fn run_audio_scenario() -> AudioSimulationMetrics {
     let session_id: SessionId = [0x2A; 16];
     let mut buffer = JitterBuffer::new(8);
     buffer.start_at(0);
-    let source = SyntheticPcmSource::new(220.0);
-    let mut encoder = OpusEncoderPipeline::new(source).expect("synthetic source should initialize");
-    let mut decoder = OpusDecoder::new(encoder.config()).expect("decoder should initialize");
+    let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(220.0), session_id, 0)
+        .expect("synthetic source should initialize");
+    let mut decoder = OpusDecoder::new(pump.config()).expect("decoder should initialize");
     let mut metrics = AudioSimulationMetrics::default();
+
+    let source_packets: Vec<AudioPacket> = (0..=4)
+        .map(|sequence| {
+            let packet = pump
+                .next_packet()
+                .expect("synthetic PCM frame should encode");
+            assert_eq!(packet.sequence, sequence);
+            assert_eq!(packet.timestamp_micros, u64::from(sequence) * 20_000);
+            packet
+        })
+        .collect();
 
     // The order models Wi-Fi reordering. Sequence 2 is lost and sequence 3 is
     // duplicated before the scheduler reaches the missing-frame deadline.
@@ -179,15 +191,7 @@ fn run_audio_scenario() -> AudioSimulationMetrics {
             continue;
         }
 
-        let opus_payload = encoder
-            .next_packet()
-            .expect("synthetic PCM frame should encode");
-        let packet = AudioPacket::new(
-            session_id,
-            sequence,
-            u64::from(sequence) * 20_000,
-            opus_payload,
-        );
+        let packet = source_packets[sequence as usize].clone();
         let encoded = packet.encode().expect("simulated packet is valid");
         let decoded = AudioPacket::decode(&encoded).expect("simulated packet is valid");
         metrics.delivered_packets += 1;
@@ -258,6 +262,56 @@ fn run_udp_control_round_trip() {
     );
 }
 
+fn run_udp_audio_fanout_round_trip() {
+    let receiver_a = UdpTransport::bind("127.0.0.1:0").expect("first audio receiver should bind");
+    let receiver_b = UdpTransport::bind("127.0.0.1:0").expect("second audio receiver should bind");
+    receiver_a
+        .set_read_timeout(Some(Duration::from_millis(250)))
+        .expect("first audio receiver timeout should be configured");
+    receiver_b
+        .set_read_timeout(Some(Duration::from_millis(250)))
+        .expect("second audio receiver timeout should be configured");
+
+    let sender = UdpTransport::bind("127.0.0.1:0").expect("audio sender should bind");
+    let session_id: SessionId = [0x2A; 16];
+    let mut pump = AudioPacketPump::new(SyntheticPcmSource::new(330.0), session_id, 5_000_000)
+        .expect("synthetic audio packet pump should initialize");
+    let fanout = AudioPacketFanout::new(&sender);
+    let destinations = [
+        receiver_a
+            .local_addr()
+            .expect("first audio receiver has an address"),
+        receiver_b
+            .local_addr()
+            .expect("second audio receiver has an address"),
+    ];
+
+    for expected_sequence in 0..3_u32 {
+        let expected_packet = pump
+            .next_packet()
+            .expect("synthetic audio packet should encode");
+        assert_eq!(expected_packet.sequence, expected_sequence);
+        let report = fanout
+            .send_packet(&expected_packet, destinations)
+            .expect("audio packet should encode for fan-out");
+        assert!(report.is_complete());
+        assert_eq!(report.attempted, 2);
+        assert_eq!(report.sent, 2);
+
+        for receiver in [&receiver_a, &receiver_b] {
+            let mut received = [0_u8; 1_024];
+            let (length, source) = receiver
+                .recv_from(&mut received)
+                .expect("fan-out packet should arrive");
+            assert_eq!(source, sender.local_addr().expect("sender has an address"));
+            assert_eq!(
+                AudioPacket::decode(&received[..length]).expect("audio packet should decode"),
+                expected_packet
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,5 +325,10 @@ mod tests {
         assert_eq!(metrics.network_dropped_packets, 1);
         assert_eq!(metrics.duplicate_packets, 1);
         assert_eq!(metrics.skipped_packets, 1);
+    }
+
+    #[test]
+    fn synthetic_audio_packet_pump_reaches_two_udp_listeners() {
+        run_udp_audio_fanout_round_trip();
     }
 }

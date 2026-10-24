@@ -11,6 +11,7 @@ path = "src/lib.rs"
 
 [dependencies]
 audiosync-codec = { path = "../codec" }
+audiosync-core = { path = "../core" }
 
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.26.0"

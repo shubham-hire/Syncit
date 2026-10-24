@@ -10,13 +10,13 @@ The current checkout supports two different levels of validation:
 1. **Build and regression validation:** available now. The workspace compiles
    the Windows WASAPI adapter, and the simulator exercises the synthetic
    PCM-to-Opus path without requiring an audio device.
-2. **Live system-audio validation:** the adapter code is present, but the
-   repository does not yet contain a command-line capture smoke test that
-   constructs `WasapiCapture`. The next implementation step is to add that
-   small executable before integrating capture with network packet sending.
+2. **Live system-audio validation:** available through the checked-in
+   `wasapi_capture_smoke` example. It constructs `WasapiCapture`, captures
+   real default-render loopback frames, round-trips them through Opus, and
+   reports the result without writing audio to disk.
 
-In other words, cloning on Windows is useful now, but `audiosync-sim` is still
-deliberately synthetic and does not access the Windows audio device.
+`audiosync-sim` remains deliberately synthetic and does not access the Windows
+audio device. The smoke example is the separate hardware validation path.
 
 ## Windows prerequisites
 
@@ -98,6 +98,34 @@ These checks cover:
 The `cargo test` run does not need a microphone, speakers, or a running audio
 application. The synthetic simulator also does not use WASAPI.
 
+## Run the real WASAPI capture smoke test
+
+While ordinary audio is playing through the default Windows output device, run
+this exact command from the repository root:
+
+```powershell
+cargo run -p audiosync-audio --example wasapi_capture_smoke --release --locked -- --frames 500
+```
+
+The example captures 500 20 ms frames by default, encodes every captured frame,
+decodes every generated packet using the pipeline's codec configuration, and
+verifies exactly 960 mono PCM samples per decoded frame. It keeps all samples
+and packets in memory. A successful run prints, at minimum:
+
+```text
+WASAPI capture smoke test PASS
+frames captured: 500
+packets encoded: 500
+packets decoded: 500
+maximum Opus packet size: ... bytes
+non-silent frames: ...
+WASAPI timeouts: 0
+elapsed time: ... seconds
+```
+
+Initialization, capture, encoding, decoding, and timeout errors are reported on
+stderr and return a non-zero process exit code.
+
 ## Compile the Windows adapter explicitly
 
 The Windows source is conditionally compiled, so an explicit target check is a
@@ -109,36 +137,29 @@ cargo check -p audiosync-audio --target x86_64-pc-windows-msvc --locked
 ```
 
 This validates the WASAPI bindings, COM setup, loopback stream initialization,
-event handling, float-stereo-to-mono conversion, and cleanup code. It does not
-open the default render endpoint or prove that live audio is arriving.
+polling-based capture, float-stereo-to-mono conversion, and cleanup code. It
+does not open the default render endpoint or prove that live audio is arriving.
 
 ## What is not wired yet
 
-There is currently no checked-in command equivalent to:
-
-```text
-open default render endpoint
-→ capture real PCM
-→ encode N Opus frames
-→ decode them for validation
-→ print capture statistics
-```
-
-`WasapiCapture` is a library type, and the simulator intentionally uses
-`SyntheticPcmSource`. Do not interpret a successful simulator run as proof that
-Windows loopback capture has been tested.
+The smoke example validates the local capture and codec path only. It does not
+run a long-lived host runtime, join or approve listeners, or send packets over
+a real hotspot. The platform-neutral `AudioPacketPump`, local UDP
+`AudioPacketFanout`, and session-aware `audiosync-runtime` now exist and are
+covered by local UDP tests, but they are not yet connected to a Windows hotspot
+or an Android playback service.
 
 ## Next implementation plan
 
-### Step 1: Add a Windows capture smoke example
+### Step 1: Windows capture smoke example — complete
 
-Add a Windows-aware example at:
+The Windows-aware example is now checked in at:
 
 ```text
 backend/native/audio/examples/wasapi_capture_smoke.rs
 ```
 
-The example should:
+The example:
 
 1. Construct `WasapiCapture::default_loopback()`.
 2. Construct `OpusEncoderPipeline<WasapiCapture>`.
@@ -151,7 +172,7 @@ The example should:
 7. Exit nonzero with a clear error if the endpoint cannot be opened or a frame
    times out.
 
-The planned command is:
+The command is:
 
 ```powershell
 cargo run -p audiosync-audio --example wasapi_capture_smoke --release --locked -- --frames 500
@@ -167,10 +188,10 @@ Smoke-test acceptance criteria:
 - Running with no active playback still produces valid frames or a documented
   silent-stream result.
 
-### Step 2: Add the host audio packet pump
+### Step 2: Add the host audio packet pump — complete at library level
 
-Create a platform-neutral pump that owns one
-`OpusEncoderPipeline<S: PcmSource>` and produces `AudioPacket` values.
+`AudioPacketPump<S>` now owns one `OpusEncoderPipeline<S>` and produces
+`AudioPacket` values.
 
 The pump should:
 
@@ -178,33 +199,69 @@ The pump should:
 - Use a sample-based timestamp timeline:
   `capture_start_micros + frame_index * 20_000`.
 - Preserve one encoder instance for the lifetime of the stream.
-- Use a bounded queue so a slow network does not block the capture worker.
 - Return source and codec errors to the host runtime instead of panicking.
 
-The first implementation can use the existing `UdpTransport` and send packets
-to one approved listener. It should not put Windows APIs into
-`audiosync-session` or `audiosync-core`.
+The host runtime, rather than this synchronous pump, is responsible for adding
+the bounded scheduling/queue boundary needed to keep a slow network from
+blocking a live capture worker.
 
-### Step 3: Reuse the same pump in the simulator
+The pump is in `audiosync-audio`, depends only on the platform-neutral codec and
+core contracts, and does not put Windows APIs into `audiosync-session` or
+`audiosync-core`.
 
-Replace the simulator's direct pipeline setup with the same packet-pump path:
+### Step 3: UDP fan-out and simulator reuse — complete at local-test level
+
+The simulator now uses the same packet-pump path:
 
 ```text
 SyntheticPcmSource
   → OpusEncoderPipeline
   → host audio packet pump
   → AudioPacket
-  → simulated loss/reordering
+  → AudioPacketFanout / simulated loss and reordering
   → JitterBuffer
   → OpusDecoder
 ```
 
-This keeps the synthetic simulator as a regression test for the exact packet
-path used by Windows capture.
+`AudioPacketFanout` sends one encoded packet to every supplied endpoint and
+records individual destination failures. The simulator also sends three
+synthetic packets to two local UDP listeners and decodes both copies.
 
-### Step 4: Add device and stream lifecycle handling
+### Step 4: Session-aware host runtime — complete at local-runtime level
 
-After the smoke test works, handle the operational cases:
+`audiosync-runtime` now connects the control socket, `HostSession`,
+`AudioPacketPump`, and `AudioPacketFanout` in a scheduler-driven host runtime.
+Its local test joins and approves a listener, answers clock sync, and sends
+synthetic audio only after the listener is active.
+
+The runtime does not create a thread or sleep; the eventual Windows host calls
+its control and audio methods from its own scheduler. Hotspot validation and UI
+approval wiring remain outstanding.
+
+### Step 5: Reference listener pipeline — complete at local-runtime level
+
+`ListenerAudioPipeline` now validates UDP audio packets, tracks session and
+packet metrics, reorders packets through the bounded jitter buffer, decodes
+ready frames, and produces explicit Opus concealment frames when the caller
+declares a packet late. `ListenerRuntime` owns the UDP receive socket and
+returns decoded PCM frames to its caller. A local 500-packet host-to-listener
+test passes through UDP and Opus decoding with zero concealment frames.
+
+It does not yet provide an Android foreground service or platform audio sink.
+
+### Step 6: Validate one real hotspot listener — next
+
+Run synthetic audio over the Windows hotspot first, then replace the source with
+WASAPI capture. Test a wired output and a Bluetooth output separately.
+
+### Step 7: Add multiple listeners and timing calibration
+
+Measure listener-to-listener skew, Bluetooth output delay, packet loss and
+recovery before expanding to the two-to-five-listener target.
+
+### Step 8: Device and stream lifecycle hardening
+
+After the receiver path works, handle the operational cases:
 
 - Default output device unavailable at startup.
 - Output device removal or replacement while capturing.
@@ -213,7 +270,7 @@ After the smoke test works, handle the operational cases:
 - Host session stop and clean encoder shutdown.
 - Clear user-facing errors for unsupported or unavailable capture.
 
-### Step 5: Measure before starting Android playback work
+### Step 9: Measure before starting Android playback work
 
 Record at least:
 
@@ -223,8 +280,9 @@ Record at least:
 - Behavior during silence and normal playback.
 - Recovery after changing the Windows output device.
 
-Only after the host can produce a stable real Opus packet stream should the
-Android playback bridge and Flutter FFI be connected.
+Only after the host can produce a stable real Opus packet stream and one
+receiver can play it should the Android playback bridge and Flutter FFI be
+connected. See `IMPLEMENTATION_PHASES.md` for the complete phase record.
 
 ## Suggested Windows test record
 
@@ -245,6 +303,51 @@ Elapsed time:
 
 Avoid committing recordings, device identifiers, or private audio to the
 repository.
+
+### Current checkout test record
+
+The live WASAPI smoke test was run three times from native Windows PowerShell
+using the same command, with a different default Windows output category for
+each run. All three runs satisfied the 500-frame acceptance criteria.
+
+Test command:
+
+```powershell
+cargo run -p audiosync-audio --example wasapi_capture_smoke --release --locked -- --frames 500
+```
+
+| Run | Default output used | Frames captured | Packets encoded / decoded | Non-silent frames | Maximum Opus packet | WASAPI timeouts | Elapsed time |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | Laptop speakers | 500 | 500 / 500 | 500 | 409 bytes | 0 | 10.033 s |
+| 2 | Wired headphones | 500 | 500 / 500 | 500 | 391 bytes | 0 | 10.027 s |
+| 3 | Bluetooth headset | 500 | 500 / 500 | 500 | 396 bytes | 0 | 10.056 s |
+
+The three runs all printed `WASAPI capture smoke test PASS`. No capture,
+encoding, decoding, timeout, or device errors were observed during these
+runs. The first run compiled the example in 19.80 seconds; the second and
+third runs reused the completed build and started in 0.13 and 0.19 seconds,
+respectively.
+
+Windows version and exact hardware make/model were not recorded. The tested
+output categories were laptop speakers, wired headphones, and a Bluetooth
+headset as labeled above.
+
+The earlier event-driven implementation had failed at frame 1 with
+`Handle wait timed out`. The current polling-based implementation using the
+Multimedia render role completed all three native Windows runs without that
+failure.
+
+After the runtime changes, a smoke-test recheck was also attempted in the
+current execution environment. It stopped at frame 1 with:
+
+```text
+WASAPI loopback produced no capture packet within 1000 ms
+```
+
+That recheck did not have a confirmed active playback/device context and is not
+counted as a replacement for the three successful hardware records above. Run
+the command again from native Windows PowerShell while ordinary audio is
+playing before treating a new result as a hardware regression.
 
 ## Troubleshooting
 
@@ -268,13 +371,21 @@ cmake --version
 
 ### The simulator passes but no live audio is heard
 
-That is expected with the current repository: the simulator is synthetic, and
-the live WASAPI smoke command is the next planned change. Once the smoke command
-exists, confirm that Windows has an active default render endpoint and that a
-normal audio application is playing through it.
+The simulator is synthetic and does not access the Windows audio device. Use
+the live WASAPI smoke command above, confirm that Windows has an active default
+render endpoint, and make sure a normal audio application is playing through it.
 
 ### Capture is silent
 
 Check the selected Windows default output device and test with ordinary system
 audio. Some protected or restricted content may not be available through
 loopback capture; the project does not attempt to bypass those restrictions.
+
+### `WASAPI loopback produced no capture packet within ... ms`
+
+The adapter uses shared-mode polling rather than relying on a loopback event
+callback, because some Windows endpoint/driver combinations do not signal the
+event handle even while the render endpoint is active. Confirm that ordinary
+audio is playing through the selected default output device and rerun the smoke
+command. The timeout remains intentional so an unavailable or inactive endpoint
+returns a clear non-zero error instead of waiting forever.

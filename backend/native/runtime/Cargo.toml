@@ -1,0 +1,17 @@
+[package]
+name = "audiosync-runtime"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Host orchestration and platform-neutral listener audio pipeline for AudioSync"
+
+[lib]
+name = "audiosync_runtime"
+path = "src/lib.rs"
+
+[dependencies]
+audiosync-audio = { path = "../audio" }
+audiosync-codec = { path = "../codec" }
+audiosync-core = { path = "../core" }
+audiosync-session = { path = "../session" }
+audiosync-transport = { path = "../transport" }

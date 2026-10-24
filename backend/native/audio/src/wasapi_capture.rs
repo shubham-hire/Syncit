@@ -6,7 +6,7 @@ use audiosync_codec::CodecConfig;
 pub struct WasapiCaptureConfig {
     /// Requested shared-mode audio-engine buffer duration.
     pub buffer_duration_millis: u32,
-    /// Maximum time to wait for the next event before returning an error.
+    /// Maximum time to poll for the next capture packet before returning an error.
     pub wait_timeout_millis: u32,
 }
 
@@ -40,7 +40,7 @@ mod windows {
     use super::*;
     use audiosync_codec::SAMPLE_RATE_HZ;
     use std::collections::VecDeque;
-    use wasapi::{DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat};
+    use wasapi::{DeviceEnumerator, Direction, Role, SampleType, StreamMode, WaveFormat};
 
     const CAPTURE_CHANNELS: usize = 2;
     const CAPTURE_BYTES_PER_SAMPLE: usize = std::mem::size_of::<f32>();
@@ -51,7 +51,6 @@ mod windows {
     pub struct WasapiCapture {
         audio_client: wasapi::AudioClient,
         capture_client: wasapi::AudioCaptureClient,
-        event_handle: wasapi::Handle,
         pcm_queue: VecDeque<i16>,
         config: CodecConfig,
         bytes_per_frame: usize,
@@ -99,7 +98,7 @@ mod windows {
         fn open(config: WasapiCaptureConfig) -> Result<Self, AudioSourceError> {
             let enumerator = DeviceEnumerator::new().map_err(capture_error)?;
             let device = enumerator
-                .get_default_device(&Direction::Render)
+                .get_default_device_for_role(&Direction::Render, &Role::Multimedia)
                 .map_err(capture_error)?;
             let mut audio_client = device.get_iaudioclient().map_err(capture_error)?;
 
@@ -130,13 +129,12 @@ mod windows {
                 .initialize_client(
                     &capture_format,
                     &Direction::Capture,
-                    &StreamMode::EventsShared {
+                    &StreamMode::PollingShared {
                         autoconvert: true,
                         buffer_duration_hns,
                     },
                 )
                 .map_err(capture_error)?;
-            let event_handle = audio_client.set_get_eventhandle().map_err(capture_error)?;
             let capture_client = audio_client
                 .get_audiocaptureclient()
                 .map_err(capture_error)?;
@@ -145,7 +143,6 @@ mod windows {
             Ok(Self {
                 audio_client,
                 capture_client,
-                event_handle,
                 pcm_queue: VecDeque::with_capacity(
                     2 * CodecConfig::default().pcm_samples_per_frame(),
                 ),
@@ -245,14 +242,23 @@ mod windows {
                 });
             }
 
+            let deadline = std::time::Instant::now()
+                + std::time::Duration::from_millis(u64::from(self.wait_timeout_millis));
             while self.pcm_queue.len() < expected {
                 self.read_available_packets()?;
                 if self.pcm_queue.len() >= expected {
                     break;
                 }
-                self.event_handle
-                    .wait_for_event(self.wait_timeout_millis)
-                    .map_err(capture_error)?;
+                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                if remaining.is_zero() {
+                    return Err(AudioSourceError::Capture {
+                        message: format!(
+                            "WASAPI loopback produced no capture packet within {} ms",
+                            self.wait_timeout_millis
+                        ),
+                    });
+                }
+                std::thread::sleep(remaining.min(std::time::Duration::from_millis(5)));
             }
 
             for sample in pcm.iter_mut() {

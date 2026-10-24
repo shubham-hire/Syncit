@@ -1,8 +1,10 @@
 //! UDP transport and versioned local session-control messages for AudioSync.
 
+mod audio;
 mod control;
 mod udp;
 
+pub use audio::{AudioFanoutReport, AudioPacketFanout, AudioSendFailure};
 pub use audiosync_core::SessionId;
 pub use control::{
     CONTROL_HEADER_LEN, CONTROL_MAGIC, CONTROL_PROTOCOL_VERSION, ControlError, ControlMessage,

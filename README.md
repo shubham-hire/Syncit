@@ -22,17 +22,30 @@ The repository currently contains:
 - A PCM source and Opus encoding pipeline with a deterministic synthetic source.
 - A Windows WASAPI shared-mode loopback capture adapter that converts system
   output to the codec's PCM contract.
+- A Windows-only `wasapi_capture_smoke` example that round-trips live loopback
+  frames through Opus without writing recordings to disk.
+- A platform-neutral `AudioPacketPump` that adds sequence numbers and timestamps
+  to encoded audio frames.
 - A local UDP transport and host/listener session state machine.
+- A UDP audio fan-out helper that sends one packet to multiple listener
+  endpoints while isolating individual send failures.
+- A local `audiosync-runtime` host orchestrator and reusable listener audio
+  pipeline for join, approval, clock sync, jitter buffering, decoding, and
+  packet-loss concealment.
 - An offline host/listener simulator.
 - A Flutter host/listener UI skeleton using mock session state, including mock
   host approval/removal and listener delay/volume controls.
 
-The WASAPI adapter is implemented but still needs hardware validation on a
-Windows host. Android foreground playback and the Flutter engine bridge remain
-future integration milestones. See
+The WASAPI adapter and capture smoke example have completed three 500-frame
+native Windows smoke runs using laptop speakers, wired headphones, and a
+Bluetooth headset. All three runs captured, encoded, and decoded 500 frames
+with no WASAPI timeouts. The exact Windows version and hardware make/model
+remain unrecorded. Android foreground playback and the Flutter engine bridge
+remain future integration milestones. See
 `backend/native/audio/WINDOWS_WASAPI_TESTING.md` for the Windows setup,
-regression checks, current live-capture limitation, and next implementation
-plan.
+regression checks, live-capture command, and hardware test record.
+The implementation boundary for each audio/network phase is recorded in
+`IMPLEMENTATION_PHASES.md`.
 
 ## Repository layout
 
@@ -46,6 +59,7 @@ backend/             Native engine and simulation code
   native/audio/      PCM sources, synthetic regression source, and WASAPI loopback
   native/transport/  UDP transport and session-control messages
   native/session/    Host/listener state and clock synchronization
+  native/runtime/    Host orchestration and listener audio runtime
   native/sim/        Offline host/listener and packet-loss simulation
 PRD.md               Product requirements
 Dockerfile           Reproducible Rust simulator image
@@ -158,9 +172,10 @@ before running Flutter commands. The Makefile also accepts
 1. Keep the protocol, session, and timing behavior tested in the offline simulator.
 2. Keep the synthetic PCM-to-Opus pipeline covered by the offline simulator.
 3. Validate Windows WASAPI loopback capture on the target host hardware.
-4. Add the Android foreground listener service.
-5. Validate synchronization and manual per-listener delay adjustment.
-6. Replace the Flutter mock session with the real engine bridge.
+4. Validate the local host runtime and listener pipeline over the Windows hotspot.
+5. Add the Android foreground listener service and real wired/Bluetooth playback.
+6. Validate synchronization and manual per-listener delay adjustment.
+7. Replace the Flutter mock session with the real engine bridge.
 
 See `PRD.md` for product requirements and acceptance criteria.
 

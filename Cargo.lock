@@ -7,6 +7,7 @@ name = "audiosync-audio"
 version = "0.1.0"
 dependencies = [
  "audiosync-codec",
+ "audiosync-core",
  "wasapi",
 ]
 
@@ -20,6 +21,17 @@ dependencies = [
 [[package]]
 name = "audiosync-core"
 version = "0.1.0"
+
+[[package]]
+name = "audiosync-runtime"
+version = "0.1.0"
+dependencies = [
+ "audiosync-audio",
+ "audiosync-codec",
+ "audiosync-core",
+ "audiosync-session",
+ "audiosync-transport",
+]
 
 [[package]]
 name = "audiosync-session"
