@@ -8,5 +8,6 @@ members = [
     "backend/native/session",
     "backend/native/runtime",
     "backend/native/apps",
+    "backend/native/ffi",
 ]
 resolver = "2"

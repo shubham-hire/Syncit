@@ -156,6 +156,14 @@ impl PlaybackScheduler {
         self.stats
     }
 
+    /// Replaces the tuning configuration (for example a new manual delay).
+    ///
+    /// Timed cadence deadlines and the render timeline are preserved; only
+    /// future decisions use the new values.
+    pub fn set_config(&mut self, config: PlaybackConfig) {
+        self.config = config;
+    }
+
     /// Drains session/control events surfaced by the last pumps.
     pub fn take_control_events(&mut self) -> Vec<SessionEvent> {
         std::mem::take(&mut self.control_events)

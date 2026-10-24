@@ -72,6 +72,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "audiosync-ffi"
+version = "0.1.0"
+dependencies = [
+ "audiosync-apps",
+ "audiosync-audio",
+ "audiosync-codec",
+ "audiosync-runtime",
+ "audiosync-session",
+ "audiosync-transport",
+]
+
+[[package]]
 name = "audiosync-runtime"
 version = "0.1.0"
 dependencies = [

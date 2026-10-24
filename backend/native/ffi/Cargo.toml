@@ -1,0 +1,19 @@
+[package]
+name = "audiosync-ffi"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "C ABI bridge over the AudioSync runtime for Flutter"
+
+[lib]
+name = "audiosync_ffi"
+path = "src/lib.rs"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[dependencies]
+audiosync-apps = { path = "../apps" }
+audiosync-audio = { path = "../audio" }
+audiosync-codec = { path = "../codec" }
+audiosync-runtime = { path = "../runtime" }
+audiosync-session = { path = "../session" }
+audiosync-transport = { path = "../transport" }

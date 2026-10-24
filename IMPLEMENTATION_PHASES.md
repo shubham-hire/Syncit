@@ -216,6 +216,28 @@ Remaining integration and hardening work includes:
 - Device compatibility and latency test matrix.
 - Sustained 30-minute playback validation.
 
+## Robustness, authentication, and tooling (October 25, 2026)
+
+- Listener watchdog: sustained host silence (default 3 s) marks the session
+  `TimedOut`, then the playback scheduler rejoins automatically on a capped
+  backoff (PRD recovery target: ~2 s). Covered by runtime tests.
+- Protocol version 2: every audio packet now carries a 16-byte truncated
+  HMAC-SHA256 tag keyed by the session token (`sha2` + `hmac` + `subtle`).
+  The pump signs, listeners verify in constant time, and forged datagrams
+  are counted (`unauthenticated_packets`) and dropped without interrupting
+  playback.
+- Calibration tooling: `audiosync-calibrate` cross-correlates two WAV
+  recordings of the same playback into a per-listener `--delay-ms`
+  suggestion. `audiosync-listener --csv FILE` records per-second soak
+  metrics.
+- `HOTSPOT_VALIDATION.md` documents the Phase 6 hardware runbook (firewall,
+  addressing, run matrix, go/no-go).
+- `audiosync-ffi`: a narrow C ABI over the runtime (host start/command,
+  listener join/pump/leave, JSON in/out) with a full C-ABI round-trip test.
+  Dart bindings and the `EngineController` live in
+  `frontend/flutter-app/lib/engine/` with mock fallback; page wiring awaits a
+  Flutter-capable machine (see the engine README).
+
 ## Current boundary
 
 The repository currently proves:

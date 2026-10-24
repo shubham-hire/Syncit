@@ -27,7 +27,7 @@ frames / 5 s at exact cadence on loopback with zero concealment.
 5. Record results in `HOTSPOT_VALIDATION.md`; tune `--buffer-ms` from jitter.
 6. Go/no-go per PRD §12; fallback to an external AP if clients are isolated.
 
-## Milestone 3 — Robustness + protocol v2
+## Milestone 3 — Robustness + protocol v2 — COMPLETE (code)
 
 - Listener watchdog: no host traffic for N seconds → `TimedOut` + auto-rejoin
   with capped backoff (PRD target: recovery within ~2 s).
@@ -44,7 +44,7 @@ frames / 5 s at exact cadence on loopback with zero concealment.
 - Fieldwork (owner): 2 → 5 listeners, kill-one-listener isolation, calibrate
   to the PRD's 20–50 ms, 30-minute soak with ≤1 interruption.
 
-## Milestone 5 — Flutter bridge + Windows host UI
+## Milestone 5 — Flutter bridge + Windows host UI — FFI COMPLETE; PAGE WIRING PENDING (needs Flutter SDK)
 
 - `audiosync-ffi`: narrow C ABI over `HostRuntime`/`HostLoop` and
   `ListenerRuntime`/`PlaybackScheduler` (JSON event/command surface).
