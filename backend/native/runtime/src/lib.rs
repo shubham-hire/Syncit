@@ -18,7 +18,30 @@ use audiosync_transport::{
 use std::fmt;
 use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
+use std::sync::OnceLock;
 use std::time::Instant;
+
+mod host_loop;
+mod playback;
+
+pub use host_loop::{
+    CommandChannelClosed, HostCommand, HostLoopConfig, HostLoopError, HostLoopHandle,
+    spawn_host_loop,
+};
+pub use playback::{
+    NullSink, PcmSink, PlaybackConfig, PlaybackError, PlaybackScheduler, PlaybackStats,
+};
+
+/// Microseconds on a stable process-wide monotonic clock.
+///
+/// The epoch is arbitrary; only differences and the NTP-style clock-offset
+/// estimator rely on these values. Host and listener each use their own local
+/// monotonic clock, which is exactly the offset being estimated.
+pub fn monotonic_micros() -> i64 {
+    static EPOCH: OnceLock<Instant> = OnceLock::new();
+    let elapsed = EPOCH.get_or_init(Instant::now).elapsed().as_micros();
+    i64::try_from(elapsed).unwrap_or(i64::MAX)
+}
 
 /// Errors returned by the host runtime while dispatching control or audio.
 #[derive(Debug)]
@@ -151,6 +174,30 @@ impl<S: PcmSource> HostRuntime<S> {
     ) -> Result<Vec<SessionEvent>, HostRuntimeError> {
         let (length, source) = self.transport.recv_from(&mut self.receive_buffer)?;
         let datagram = self.receive_buffer[..length].to_vec();
+        self.handle_control_datagram(
+            source,
+            &datagram,
+            now,
+            host_received_micros,
+            host_sent_micros,
+        )
+    }
+
+    /// Receives one control datagram and dispatches any resulting responses
+    /// using real [`monotonic_micros`] timestamps for clock-sync replies.
+    ///
+    /// The receive timestamp is captured immediately after the datagram
+    /// arrives; the send timestamp just before the response is encoded. This
+    /// is the variant scheduling loops should use; the deterministic variant
+    /// above stays available for tests.
+    pub fn receive_control_once_realtime(
+        &mut self,
+        now: Instant,
+    ) -> Result<Vec<SessionEvent>, HostRuntimeError> {
+        let (length, source) = self.transport.recv_from(&mut self.receive_buffer)?;
+        let host_received_micros = monotonic_micros();
+        let datagram = self.receive_buffer[..length].to_vec();
+        let host_sent_micros = monotonic_micros();
         self.handle_control_datagram(
             source,
             &datagram,

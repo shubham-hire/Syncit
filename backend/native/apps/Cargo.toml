@@ -1,0 +1,27 @@
+[package]
+name = "audiosync-apps"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Host and listener command-line prototypes for AudioSync"
+
+[lib]
+name = "audiosync_apps"
+path = "src/lib.rs"
+
+[[bin]]
+name = "audiosync-host"
+path = "src/bin/audiosync_host.rs"
+
+[[bin]]
+name = "audiosync-listener"
+path = "src/bin/audiosync_listener.rs"
+
+[dependencies]
+audiosync-audio = { path = "../audio" }
+audiosync-codec = { path = "../codec" }
+audiosync-core = { path = "../core" }
+audiosync-runtime = { path = "../runtime" }
+audiosync-session = { path = "../session" }
+audiosync-transport = { path = "../transport" }
+cpal = "0.15"

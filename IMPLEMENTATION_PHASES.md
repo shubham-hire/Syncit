@@ -126,17 +126,24 @@ host prototype:
 8. Expire stale listeners and stop sending to them.
 
 The existing session layer intentionally does not own sockets, threads or
-clocks, so this phase belongs in a host runtime/orchestration layer rather than
-in `audiosync-session`. The runtime is covered by a local UDP test that joins,
-approves, clock-syncs, and sends one synthetic audio packet to a listener. The
-remaining work is scheduler integration, Windows hotspot validation, and UI
-approval wiring.
+clocks, so this phase belongs in a host runtime/orchestration layer rather
+than in `audiosync-session`. The runtime is covered by a local UDP test that
+joins, approves, clock-syncs, and sends one synthetic audio packet to a
+listener.
+
+The scheduler now exists: `HostLoop` (`backend/native/runtime/src/host_loop.rs`)
+owns the runtime on one thread, drives the 20 ms audio cadence from a
+drift-corrected anchor, dispatches control between ticks with real monotonic
+clock-sync timestamps, expires stale listeners, and executes approve/remove/
+end commands from a channel. The remaining work is Windows hotspot validation
+and UI approval wiring.
 
 Implementation:
 
 ```text
 backend/native/runtime/Cargo.toml
 backend/native/runtime/src/lib.rs
+backend/native/runtime/src/host_loop.rs
 ```
 
 ## Phase 5: Reference listener pipeline — In progress (local receiver complete)
@@ -158,9 +165,14 @@ clock offset, and concealment metrics. It must not write recordings by default.
 The current implementation validates packets, reorders them, decodes ready
 frames, and explicitly produces Opus loss-concealment frames after the caller's
 playback deadline. `ListenerRuntime` owns a UDP socket and returns decoded PCM
-frames to its caller. The Android foreground service and platform PCM sink are
-still pending. A local 500-packet host-to-listener test passes through UDP,
-packet validation, and Opus decoding with zero concealment frames.
+frames to its caller. `PlaybackScheduler`
+(`backend/native/runtime/src/playback.rs`) now paces those frames on a
+wall-clock timeline (configurable pre-roll, loss grace, and manual listener
+delay) while keeping the heartbeat and clock-sync cadence. The `audiosync-host`
+and `audiosync-listener` binaries (`backend/native/apps/`) wrap both loops and
+play through CPAL or a null sink; a 5-second local run streams 250 frames at
+the exact 50 frames/s cadence with zero concealment. The Android foreground
+service remains pending.
 
 ## Phase 6: One real hotspot listener — Not started
 

@@ -60,6 +60,7 @@ backend/             Native engine and simulation code
   native/transport/  UDP transport and session-control messages
   native/session/    Host/listener state and clock synchronization
   native/runtime/    Host orchestration and listener audio runtime
+  native/apps/       audiosync-host and audiosync-listener command-line prototypes
   native/sim/        Offline host/listener and packet-loss simulation
 PRD.md               Product requirements
 Dockerfile           Reproducible Rust simulator image
@@ -104,6 +105,36 @@ Expected output includes:
 ```text
 SyncIt simulator PASS
 ```
+
+## Run the host and listener prototypes
+
+Two command-line binaries stream real audio end-to-end over UDP. On Windows
+the host captures system audio through WASAPI loopback; on other platforms it
+falls back to a synthetic tone.
+
+Start the host on the streaming machine:
+
+```bash
+make host                          # Windows: WASAPI capture
+make host ARGS="--synthetic"       # any platform: synthetic tone
+```
+
+The host prints a ready-to-paste listener command with its session and token.
+Run it on the receiving machine (add `--null-output` to skip audio playback):
+
+```bash
+make listener ARGS="--host 192.168.137.1:41000 --session <hex> --token <hex>"
+```
+
+Listener flags: `--delay-ms` (manual calibration), `--buffer-ms` (jitter
+pre-roll, default 100), `--grace-ms` (loss patience), `--volume 0.0-1.0`,
+`--duration-secs N`. The listener prints per-second metrics (rendered and
+concealed frames, duplicates, late packets, buffer depth, clock RTT/offset).
+Host stdin commands: `list` and `end`.
+
+For the first real hotspot experiment (Phase 6), run the host on the Windows
+machine with its Mobile Hotspot enabled, allow the UDP port through the
+firewall, and point the listener at the hotspot-side host address.
 
 ## Run the Flutter prototype
 

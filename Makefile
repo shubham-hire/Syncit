@@ -3,7 +3,7 @@ SHELL := /bin/sh
 CARGO ?= cargo
 FLUTTER ?= flutter
 
-.PHONY: test test-core test-ui test-landing format-check lint lint-landing build build-landing sim
+.PHONY: test test-core test-ui test-landing format-check lint lint-landing build build-landing sim host listener
 
 test: test-core
 	@if command -v $(FLUTTER) >/dev/null 2>&1; then \
@@ -46,3 +46,9 @@ build-landing:
 
 sim:
 	$(CARGO) run -p audiosync-sim --locked
+
+host:
+	$(CARGO) run -p audiosync-apps --bin audiosync-host --locked -- $(ARGS)
+
+listener:
+	$(CARGO) run -p audiosync-apps --bin audiosync-listener --locked -- $(ARGS)
