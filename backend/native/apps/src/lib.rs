@@ -1,6 +1,7 @@
 //! Shared helpers for the AudioSync command-line prototypes: a tiny flag
 //! parser, hex session/token encoding, and the CPAL output sink.
 
+pub mod calibrate;
 pub mod cpal_sink;
 
 use std::collections::{HashMap, HashSet};

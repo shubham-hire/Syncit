@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 const USAGE: &str = "Usage: audiosync-listener --host IP:PORT --session HEX32 --token HEX32 \
 [--delay-ms N] [--buffer-ms N] [--grace-ms N] [--volume 0.0-1.0] [--null-output] \
-[--duration-secs N]";
+[--duration-secs N] [--csv FILE]";
 
 fn main() {
     if let Err(error) = run() {
@@ -34,6 +34,7 @@ fn run() -> Result<(), CliError> {
             "grace-ms",
             "volume",
             "duration-secs",
+            "csv",
         ],
         &["null-output", "help"],
     )
@@ -111,6 +112,17 @@ fn run() -> Result<(), CliError> {
         ..PlaybackConfig::default()
     });
     let mut null_sink = NullSink::default();
+    let mut metrics_csv = match args.value("csv") {
+        Some(path) => {
+            use std::io::Write;
+            let mut file = std::fs::File::create(path)
+                .map_err(|error| format!("could not create {path:?}: {error}"))?;
+            writeln!(file, "elapsed_s,state,rendered,concealed,received,duplicate,late,unauthenticated,buffered,rtt_us,offset_us")
+                .map_err(|error| format!("could not write {path:?}: {error}"))?;
+            Some((file, std::time::Instant::now()))
+        }
+        None => None,
+    };
 
     let deadline = if duration_secs == 0 {
         None
@@ -142,6 +154,23 @@ fn run() -> Result<(), CliError> {
             let rendered = playback.rendered_frames;
             let rate = rendered.saturating_sub(last_rendered);
             last_rendered = rendered;
+            if let Some((file, started)) = metrics_csv.as_mut() {
+                use std::io::Write;
+                let _ = writeln!(
+                    file,
+                    "{:.1},{:?},{rendered},{},{},{},{},{},{},{},{}",
+                    started.elapsed().as_secs_f32(),
+                    session.state(),
+                    playback.concealed_frames,
+                    pipeline.received_packets,
+                    pipeline.duplicate_packets,
+                    pipeline.too_late_packets,
+                    pipeline.unauthenticated_packets,
+                    runtime.pipeline().buffered_packets(),
+                    session.best_round_trip_micros().unwrap_or(-1),
+                    session.clock_offset_micros().unwrap_or(0),
+                );
+            }
             println!(
                 "state {:?} | rendered {rendered} (+{rate}/s) concealed {} | recv {} dup {} late {} forger {} | buffered {} | rtt {} µs offset {} µs",
                 session.state(),

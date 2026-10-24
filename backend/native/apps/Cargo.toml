@@ -17,6 +17,10 @@ path = "src/bin/audiosync_host.rs"
 name = "audiosync-listener"
 path = "src/bin/audiosync_listener.rs"
 
+[[bin]]
+name = "audiosync-calibrate"
+path = "src/bin/audiosync_calibrate.rs"
+
 [dependencies]
 audiosync-audio = { path = "../audio" }
 audiosync-codec = { path = "../codec" }

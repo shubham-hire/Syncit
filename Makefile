@@ -3,7 +3,7 @@ SHELL := /bin/sh
 CARGO ?= cargo
 FLUTTER ?= flutter
 
-.PHONY: test test-core test-ui test-landing format-check lint lint-landing build build-landing sim host listener
+.PHONY: test test-core test-ui test-landing format-check lint lint-landing build build-landing sim host listener calibrate
 
 test: test-core
 	@if command -v $(FLUTTER) >/dev/null 2>&1; then \
@@ -52,3 +52,6 @@ host:
 
 listener:
 	$(CARGO) run -p audiosync-apps --bin audiosync-listener --locked -- $(ARGS)
+
+calibrate:
+	$(CARGO) run -p audiosync-apps --bin audiosync-calibrate --locked -- $(ARGS)

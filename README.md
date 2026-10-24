@@ -128,9 +128,21 @@ make listener ARGS="--host 192.168.137.1:41000 --session <hex> --token <hex>"
 
 Listener flags: `--delay-ms` (manual calibration), `--buffer-ms` (jitter
 pre-roll, default 100), `--grace-ms` (loss patience), `--volume 0.0-1.0`,
-`--duration-secs N`. The listener prints per-second metrics (rendered and
-concealed frames, duplicates, late packets, buffer depth, clock RTT/offset).
-Host stdin commands: `list` and `end`.
+`--duration-secs N`, `--csv FILE` (per-second soak metrics). The listener
+prints per-second metrics (rendered and concealed frames, duplicates, late
+packets, unauthenticated drops, buffer depth, clock RTT/offset). Host stdin
+commands: `list` and `end`.
+
+To calibrate two listeners against each other, record the same 30+ seconds of
+playback next to each listener's headphones as 16-bit WAV and run:
+
+```bash
+make calibrate ARGS="--a listener1.wav --b listener2.wav"
+```
+
+It reports which listener leads and the `--delay-ms` adjustment that aligns
+them. For the first real hotspot experiment, follow
+`HOTSPOT_VALIDATION.md`.
 
 For the first real hotspot experiment (Phase 6), run the host on the Windows
 machine with its Mobile Hotspot enabled, allow the UDP port through the
