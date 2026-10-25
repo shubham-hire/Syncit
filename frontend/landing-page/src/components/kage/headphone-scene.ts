@@ -474,17 +474,25 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
   };
   window.addEventListener("mousemove", onMouseMove);
 
+  function getScrollProgress() {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    let effectiveMaxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    if (footer) {
+      const footerTop = footer.getBoundingClientRect().top + scrollTop;
+      effectiveMaxScroll = Math.max(footerTop - window.innerHeight - 80, 100);
+    }
+    return Math.min(Math.max(scrollTop / effectiveMaxScroll, 0), 1);
+  }
+
   /**
-   * Bookend presence: the rig is a hero element and a finale element, never a
-   * floating layer. It fades out as the hero scrolls away and returns only for
-   * the exploded-view finale at #eternity, so mid-page content stays clean.
+   * Hero presence while the hero section is on screen; eases to 0 as the hero
+   * tail leaves the viewport. On wide screens a floor opacity keeps the rig
+   * alive as a quiet floating layer between the hero and the finale.
    */
   function getHeroVisibility() {
     const hero = document.getElementById("hero");
     if (!hero) return 0;
     const heroBottom = hero.getBoundingClientRect().bottom;
-    // Complete the fade while the hero tail is still on screen, so the rig is
-    // fully gone before the next section's headline scrolls up to its pose.
     const fadeStart = window.innerHeight * 0.98;
     const fadeEnd = window.innerHeight * 0.8;
     return Math.min(Math.max((heroBottom - fadeEnd) / (fadeStart - fadeEnd), 0), 1);
@@ -509,17 +517,42 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
   let frame = 0;
   let canvasOpacity = -1;
 
-  // Hero pose: centred just below the fold line of copy, pulled slightly back
-  // so the product reads as a big but non-overlapping presence. Finale pose:
-  // centred at full size with the exploded split. World units at camera z=15.
-  const HERO_SCALE = 0.68;
+  // Finale pose: centred at full size with the exploded split.
   const FINALE_Y = -0.35;
-  const heroPoseY = () => (window.innerWidth <= 768 ? -4.5 : -4.15);
+
+  const heroVisual = document.querySelector<HTMLElement>(".hero-visual");
+
+  /**
+   * Anchor the hero pose to the .hero-visual column, so the product sits
+   * exactly where the layout reserved space for it — beside the copy on wide
+   * screens, under it on narrow ones — at any viewport size. Rect coordinates
+   * are converted to world units at the camera's depth (z=15, fov 40).
+   */
+  function heroPose() {
+    const visibleHeight = 2 * Math.tan((40 * Math.PI) / 180 / 2) * 15;
+    const visibleWidth = visibleHeight * (window.innerWidth / window.innerHeight);
+    if (!heroVisual) {
+      return { x: 0, y: -4.2, scale: 0.62 };
+    }
+    const rect = heroVisual.getBoundingClientRect();
+    // Once the column scrolls out of view, hold the anchor on-screen; the
+    // scroll drift takes over from there.
+    const cx = Math.min(Math.max(rect.left + rect.width / 2, 0), window.innerWidth);
+    const cy = Math.min(
+      Math.max(rect.top + rect.height / 2, window.innerHeight * 0.3),
+      window.innerHeight * 0.85,
+    );
+    const x = ((cx / window.innerWidth) * 2 - 1) * (visibleWidth / 2);
+    const y = -((cy / window.innerHeight) * 2 - 1) * (visibleHeight / 2);
+    const scale = Math.min(Math.max(rect.height / (visibleHeight * 0.82), 0.5), 1.02);
+    return { x, y, scale };
+  }
 
   function animate() {
     frame = requestAnimationFrame(animate);
     const delta = Math.min(clock.getDelta(), 0.05);
     const t = clock.getElapsedTime();
+    const scrollP = getScrollProgress();
     const chapterSplitTarget = getChapterProgress("eternity");
     const splitDamping = 1 - Math.exp(-delta * 8);
 
@@ -539,13 +572,29 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     }
     const exit = smoothstep(exitFactor);
 
-    masterRig.position.x = 0;
-    masterRig.position.y =
-      heroPoseY() + (FINALE_Y - heroPoseY()) * splitP + Math.sin(t * 1.2) * 0.05 + exit * 1.7;
-    const heroScale = HERO_SCALE + (TARGET_SCALE - HERO_SCALE) * splitP;
-    masterRig.scale.set(heroScale, heroScale, heroScale);
-    masterRig.rotation.y = 0.28 + targetRotY + splitP * 0.5;
-    masterRig.rotation.x = -0.04 + targetRotX * 0.6;
+    // Wide screens keep the product floating through the page: it detaches
+    // from its hero column as you scroll, shrinks to a quiet presence that
+    // passes behind the frosted cards, and returns centre stage for the
+    // finale split. Narrow screens fade it out between hero and finale so it
+    // never sits behind full-width text.
+    const floating = window.innerWidth > 1024;
+    const drift = smoothstep(Math.min(scrollP / 0.18, 1));
+    const gateP = smoothstep(getChapterProgress("gate"));
+    const hero = heroPose();
+    const intro = Math.min(t / 1.2, 1);
+    const fromRight = (1 - intro) * 1.6;
+
+    const posX = (hero.x + (1.35 - hero.x) * drift) * (1 - splitP);
+    let posY = hero.y + (-0.2 - hero.y) * drift;
+    posY += (FINALE_Y - posY) * splitP + Math.sin(t * 1.2) * 0.05 + exit * 1.7;
+    let scale = hero.scale + (0.55 - hero.scale) * drift;
+    scale += (TARGET_SCALE - scale) * splitP;
+
+    masterRig.position.x = posX + (floating ? fromRight : 0);
+    masterRig.position.y = posY;
+    masterRig.scale.set(scale, scale, scale);
+    masterRig.rotation.y = 0.3 + scrollP * 2.2 + targetRotY + splitP * 0.35;
+    masterRig.rotation.x = -0.05 + targetRotX * 0.6 + Math.sin(scrollP * Math.PI) * 0.08;
 
     // Separate in screen space so the headphones always travel right and the
     // earbuds always travel left, regardless of the rig's rotation.
@@ -555,23 +604,26 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     worldOffset
       .set(splitDistance * splitP, 0.2 * splitP, 0)
       .applyQuaternion(inverseMasterRotation)
-      .multiplyScalar(1 / TARGET_SCALE);
+      .multiplyScalar(1 / scale);
     headphoneGroup.position.copy(worldOffset);
     headphoneGroup.rotation.z = splitP * 0.06;
 
     worldOffset
       .set(-splitDistance * 0.9 * splitP, -0.16 * splitP, 0)
       .applyQuaternion(inverseMasterRotation)
-      .multiplyScalar(1 / TARGET_SCALE);
+      .multiplyScalar(1 / scale);
     earbudsGroup.position.copy(worldOffset);
     earbudsGroup.rotation.z = -splitP * 0.08;
 
     earbudL.position.y = -2.3 + Math.sin(t * 1.4 + 1.2) * 0.08;
     earbudR.position.y = -2.2 + Math.cos(t * 1.3 + 2.0) * 0.08;
 
-    // Soft intro on load, then hero/finale bookends minus the footer exit.
-    const intro = Math.min(t / 1.2, 1);
-    const targetOpacity = Math.max(heroV, splitP * 0.94) * intro * (1 - exit);
+    // Soft intro on load; in the hero the product is fully present, while
+    // floating it settles to a faint watermark — visible in motion, quiet at
+    // rest, and dipped further while #gate's wide content is on screen.
+    const cruiseOpacity = floating ? Math.max(0.26 - gateP * 0.08, 0.18) : 0;
+    const presence = Math.max(heroV, cruiseOpacity, splitP * 0.94);
+    const targetOpacity = presence * intro * (1 - exit);
     if (Math.abs(targetOpacity - canvasOpacity) > 0.004) {
       canvasOpacity = targetOpacity;
       renderer.domElement.style.opacity = targetOpacity.toFixed(3);

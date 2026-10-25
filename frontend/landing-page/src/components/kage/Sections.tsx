@@ -30,42 +30,44 @@ function SectionIntro({
 export function Hero() {
   return (
     <section className="hero" id="hero">
-      <div className="hero-inner">
-        <div className="status-pill" data-reveal="up">
-          <span className="pulse-dot" />
-          <span>{statusPill}</span>
+      <div className="hero-grid">
+        <div className="hero-copy">
+          <div className="status-pill" data-reveal="up">
+            <span className="pulse-dot" />
+            <span>{statusPill}</span>
+          </div>
+          <h1 className="display h-hero" data-reveal="up" data-reveal-delay="90">
+            One audio session.
+            <br />
+            Everyone listens <span className="grad">together.</span>
+          </h1>
+          <p className="hero-sub body-lg" data-reveal="up" data-reveal-delay="180">
+            SyncIt shares what your PC is playing with everyone&rsquo;s own headphones over Wi-Fi —
+            no internet, no pairing math, and every listener on the same beat.
+          </p>
+          <div className="hero-ctas" data-reveal="up" data-reveal-delay="270">
+            <a
+              className="btn btn-primary"
+              href={downloadAction.href}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <span>{downloadAction.label}</span>
+              <DownloadIcon />
+            </a>
+            <a className="btn-link" href={heroAction.href}>
+              <span>{heroAction.label}</span>
+              <ChevronIcon />
+            </a>
+          </div>
         </div>
-        <h1 className="display h-hero" data-reveal="up" data-reveal-delay="90">
-          One audio session.
-          <br />
-          Everyone listens <span className="grad">together.</span>
-        </h1>
-        <p className="hero-sub body-lg" data-reveal="up" data-reveal-delay="180">
-          SyncIt shares what your PC is playing with everyone&rsquo;s own headphones over Wi-Fi — no
-          internet, no pairing math, and every listener on the same beat.
-        </p>
-        <div className="hero-ctas" data-reveal="up" data-reveal-delay="270">
-          <a
-            className="btn btn-primary"
-            href={downloadAction.href}
-            rel="noreferrer"
-            target="_blank"
-          >
-            <span>{downloadAction.label}</span>
-            <DownloadIcon />
-          </a>
-          <a className="btn-link" href={heroAction.href}>
-            <span>{heroAction.label}</span>
-            <ChevronIcon />
-          </a>
-        </div>
-      </div>
 
-      <div className="hero-visual" aria-hidden="true">
-        <div className="broadcast-carrier">
-          <div className="carrier-wave" />
-          <div className="carrier-wave" />
-          <div className="carrier-wave" />
+        <div className="hero-visual" aria-hidden="true">
+          <div className="broadcast-carrier">
+            <div className="carrier-wave" />
+            <div className="carrier-wave" />
+            <div className="carrier-wave" />
+          </div>
         </div>
       </div>
 
