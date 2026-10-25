@@ -7,6 +7,11 @@ type Three = typeof ThreeNS;
  * The rig drifts from hero-right to centre, then separates into a wide
  * headphone/earbud composition as Chapter 4 enters the viewport. Returns a
  * cleanup function.
+ *
+ * Rendering model: PBR materials (standard/clearcoat) lit by a PMREM-baked
+ * gradient environment plus a few directional lights, tone-mapped with ACES.
+ * All geometry is procedural — no external model files, so the bundle stays
+ * three.js-only.
  */
 export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () => void {
   const width = container.clientWidth || window.innerWidth;
@@ -23,58 +28,104 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
   });
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.3;
   container.appendChild(renderer.domElement);
 
-  // Lighting
-  scene.add(new THREE.AmbientLight(0xffffff, 1.8));
-  const keyLight = new THREE.DirectionalLight(0xffffff, 3.2);
-  keyLight.position.set(12, 16, 14);
-  const fillLight = new THREE.DirectionalLight(0xedf2f7, 2.0);
-  fillLight.position.set(-14, 6, 10);
-  const rimLight = new THREE.DirectionalLight(0xdc3522, 2.4);
-  rimLight.position.set(0, -12, -8);
-  const topLight = new THREE.DirectionalLight(0xffffff, 2.5);
-  topLight.position.set(0, 18, 4);
+  // ---------- Environment (PMREM-baked gradient room with HDR softboxes)
+  const envRenderTarget = buildEnvironment(THREE, renderer);
+  scene.environment = envRenderTarget.texture;
+
+  // ---------- Lighting (the environment carries the base; these shape form)
+  scene.add(new THREE.AmbientLight(0xffffff, 0.42));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.9);
+  keyLight.position.set(10, 14, 12);
+  const fillLight = new THREE.DirectionalLight(0xe9eff7, 0.9);
+  fillLight.position.set(-12, 4, 10);
+  const rimLight = new THREE.DirectionalLight(0xdc3522, 1.35);
+  rimLight.position.set(0, -10, -9);
+  const topLight = new THREE.DirectionalLight(0xffffff, 1.05);
+  topLight.position.set(0, 16, 5);
   scene.add(keyLight, fillLight, rimLight, topLight);
 
-  // Materials
-  const graphiteMat = new THREE.MeshPhongMaterial({
-    color: 0x111316,
-    specular: 0x99a4b2,
-    shininess: 120,
+  // ---------- Materials
+  const srgb = (hex: number) => new THREE.Color(hex).convertSRGBToLinear();
+
+  const headphoneRedMat = new THREE.MeshPhysicalMaterial({
+    color: srgb(0xda2033),
+    roughness: 0.36,
+    metalness: 0.0,
+    clearcoat: 0.55,
+    clearcoatRoughness: 0.3,
+    envMapIntensity: 0.6,
   });
-  const headphoneRedMat = new THREE.MeshPhongMaterial({
-    color: 0xb51f2b,
-    specular: 0xffd4d4,
-    shininess: 180,
+  const ceramicMat = new THREE.MeshPhysicalMaterial({
+    color: srgb(0xe62c3e),
+    roughness: 0.24,
+    metalness: 0.0,
+    clearcoat: 0.9,
+    clearcoatRoughness: 0.1,
+    envMapIntensity: 0.65,
   });
-  const earbudRedMat = new THREE.MeshPhongMaterial({
-    color: 0xd92c3a,
-    specular: 0xffffff,
-    shininess: 210,
+  const titaniumMat = new THREE.MeshStandardMaterial({
+    color: srgb(0xcfd7de),
+    metalness: 1.0,
+    roughness: 0.28,
   });
-  const brushedTitaniumMat = new THREE.MeshPhongMaterial({
-    color: 0xc8d0d8,
-    specular: 0xffffff,
-    shininess: 150,
+  const graphiteMat = new THREE.MeshStandardMaterial({
+    color: srgb(0x17191d),
+    metalness: 0.6,
+    roughness: 0.42,
   });
-  const leatherCushionMat = new THREE.MeshLambertMaterial({ color: 0x340b12 });
-  const grilleMeshMat = new THREE.MeshPhongMaterial({
-    color: 0x26070d,
-    specular: 0x9b3540,
-    shininess: 80,
+  const leatherMat = new THREE.MeshStandardMaterial({
+    color: srgb(0x5c1622),
+    metalness: 0.0,
+    roughness: 0.72,
+    envMapIntensity: 0.65,
   });
-  const vermilionAccentMat = new THREE.MeshPhongMaterial({
-    color: 0xee2c18,
-    emissive: 0x4a0701,
-    specular: 0xff8877,
-    shininess: 130,
+  const grilleMat = new THREE.MeshStandardMaterial({
+    color: srgb(0x1c060a),
+    metalness: 0.4,
+    roughness: 0.55,
+  });
+  const accentMat = new THREE.MeshStandardMaterial({
+    color: srgb(0xe63118),
+    metalness: 0.2,
+    roughness: 0.3,
+  });
+  const threadMat = new THREE.MeshStandardMaterial({
+    color: srgb(0xe9dccf),
+    metalness: 0.0,
+    roughness: 0.9,
+  });
+  const ledMat = new THREE.MeshStandardMaterial({
+    color: srgb(0x300402),
+    emissive: srgb(0xff3a1e),
+    emissiveIntensity: 2.4,
   });
 
   const masterRig = new THREE.Group();
   scene.add(masterRig);
+
+  /** Lathe helper: `points` are (radius, height) pairs spun around the Y axis. */
+  const lathe = (points: Array<[number, number]>, segments = 48) =>
+    new THREE.LatheGeometry(
+      points.map(([radius, height]) => new THREE.Vector2(radius, height)),
+      segments,
+    );
+
+  const mesh = (
+    parent: ThreeNS.Object3D,
+    geometry: ThreeNS.BufferGeometry,
+    material: ThreeNS.Material,
+    position?: ThreeNS.Vector3Tuple,
+  ) => {
+    const part = new THREE.Mesh(geometry, material);
+    if (position) part.position.set(...position);
+    parent.add(part);
+    return part;
+  };
 
   // ---------- Headphones
   const headphoneGroup = new THREE.Group();
@@ -86,9 +137,7 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     new THREE.Vector3(2.5, 4.6, 0),
     new THREE.Vector3(3.2, 0.7, 0),
   );
-  headphoneGroup.add(
-    new THREE.Mesh(new THREE.TubeGeometry(headbandCurve, 64, 0.13, 16, false), headphoneRedMat),
-  );
+  mesh(headphoneGroup, new THREE.TubeGeometry(headbandCurve, 72, 0.13, 20, false), headphoneRedMat);
 
   const strapCurve = new THREE.CubicBezierCurve3(
     new THREE.Vector3(-2.8, 1.1, 0),
@@ -96,32 +145,66 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     new THREE.Vector3(2.1, 4.15, 0),
     new THREE.Vector3(2.8, 1.1, 0),
   );
-  headphoneGroup.add(
-    new THREE.Mesh(new THREE.TubeGeometry(strapCurve, 64, 0.3, 16, false), leatherCushionMat),
-  );
+  mesh(headphoneGroup, new THREE.TubeGeometry(strapCurve, 72, 0.3, 20, false), leatherMat);
 
+  // Contrast stitching along the underside of the cushion.
+  const stitchGeo = new THREE.BoxGeometry(0.016, 0.016, 0.09);
+  const stitchUp = new THREE.Vector3(0, 0, 1);
+  const STITCH_COUNT = 12;
+  for (let index = 0; index < STITCH_COUNT; index += 1) {
+    const t = 0.12 + (index / (STITCH_COUNT - 1)) * 0.76;
+    const point = strapCurve.getPointAt(t);
+    const tangent = strapCurve.getTangentAt(t).normalize();
+    const stitch = new THREE.Mesh(stitchGeo, threadMat);
+    stitch.position.set(point.x, point.y - 0.3, point.z);
+    stitch.quaternion.setFromUnitVectors(stitchUp, tangent);
+    headphoneGroup.add(stitch);
+  }
+
+  // Slider housings where the band meets the extendable rods.
   [-2.9, 2.9].forEach((x) => {
-    const clamp = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.6, 0.48), brushedTitaniumMat);
-    clamp.position.set(x, 1.1, 0);
-    const redAccent = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.08, 0.5, 16),
-      vermilionAccentMat,
+    mesh(headphoneGroup, new THREE.CylinderGeometry(0.3, 0.34, 0.72, 24), graphiteMat, [
+      x,
+      1.05,
+      0,
+    ]);
+    mesh(
+      headphoneGroup,
+      new THREE.SphereGeometry(0.3, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+      graphiteMat,
+      [x, 1.41, 0],
     );
-    redAccent.rotation.z = Math.PI / 2;
-    redAccent.position.set(x, 1.1, 0);
-    headphoneGroup.add(clamp, redAccent);
+    mesh(headphoneGroup, new THREE.CylinderGeometry(0.315, 0.315, 0.14, 24), accentMat, [
+      x,
+      0.84,
+      0,
+    ]);
+    mesh(headphoneGroup, new THREE.CylinderGeometry(0.07, 0.07, 0.05, 6), titaniumMat, [
+      x,
+      1.44,
+      0,
+    ]);
   });
 
   function createAcousticCup(isLeft: boolean) {
     const side = isLeft ? -1 : 1;
     const cupAssembly = new THREE.Group();
 
-    const sliderRod = new THREE.Mesh(
+    const sliderRod = mesh(
+      cupAssembly,
       new THREE.CylinderGeometry(0.11, 0.11, 1.7, 20),
-      brushedTitaniumMat,
+      titaniumMat,
+      [side * 3.25, 0.15, 0],
     );
-    sliderRod.position.set(side * 3.25, 0.15, 0);
-    cupAssembly.add(sliderRod);
+    // Height-adjustment grooves on the visible part of each rod.
+    [0.45, 0.32, 0.19].forEach((y) => {
+      const groove = mesh(cupAssembly, new THREE.TorusGeometry(0.115, 0.014, 10, 28), graphiteMat, [
+        side * 3.25,
+        y,
+        0,
+      ]);
+      groove.rotation.x = Math.PI / 2;
+    });
 
     const yokeGroup = new THREE.Group();
     yokeGroup.position.set(side * 3.28, -0.65, 0);
@@ -130,20 +213,28 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
       .getPoints(40)
       .map((p) => new THREE.Vector3(p.x * (isLeft ? 1 : -1) * 0.48, p.y, 0));
     const yoke3DCurve = new THREE.CatmullRomCurve3(yokePoints);
-    yokeGroup.add(
-      new THREE.Mesh(new THREE.TubeGeometry(yoke3DCurve, 40, 0.12, 14, false), graphiteMat),
-    );
+    mesh(yokeGroup, new THREE.TubeGeometry(yoke3DCurve, 40, 0.12, 14, false), graphiteMat);
 
     [1.5, -1.5].forEach((y) => {
-      const hub = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.15, 0.15, 0.22, 18),
-        brushedTitaniumMat,
-      );
+      const hub = mesh(yokeGroup, new THREE.CylinderGeometry(0.15, 0.15, 0.22, 18), titaniumMat, [
+        0,
+        y,
+        0,
+      ]);
       hub.rotation.x = Math.PI / 2;
-      hub.position.set(0, y, 0);
-      const vermDot = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 12), vermilionAccentMat);
-      vermDot.position.set(0, y, side * 0.12);
-      yokeGroup.add(hub, vermDot);
+      const pivotScrew = mesh(
+        yokeGroup,
+        new THREE.CylinderGeometry(0.06, 0.06, 0.05, 6),
+        graphiteMat,
+        [0, y, side * 0.13],
+      );
+      pivotScrew.rotation.x = Math.PI / 2;
+      const vermDot = mesh(yokeGroup, new THREE.SphereGeometry(0.065, 12, 12), accentMat, [
+        0,
+        y,
+        side * 0.09,
+      ]);
+      vermDot.position.z = side * 0.1;
     });
     cupAssembly.add(yokeGroup);
 
@@ -152,51 +243,87 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     earcup.rotation.y = side * 0.18;
     earcup.rotation.z = side * 0.05;
 
-    const cupOuter = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.5, 1.58, 0.74, 44),
+    // Barrel shell lathed from a rounded back pole to an open front lip.
+    const shell = mesh(
+      earcup,
+      lathe(
+        [
+          [0.02, -0.6],
+          [0.5, -0.57],
+          [0.95, -0.46],
+          [1.3, -0.2],
+          [1.46, 0.06],
+          [1.44, 0.24],
+          [1.3, 0.34],
+        ],
+        56,
+      ),
       headphoneRedMat,
     );
-    cupOuter.rotation.z = Math.PI / 2;
-    earcup.add(cupOuter);
+    shell.rotation.z = (side * Math.PI) / 2;
 
-    const titaniumRim = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.46, 1.46, 0.15, 44),
-      brushedTitaniumMat,
-    );
-    titaniumRim.rotation.z = Math.PI / 2;
-    titaniumRim.position.x = side * 0.38;
-    earcup.add(titaniumRim);
+    // Titanium rim around the shell opening plus a pinline on the shoulder.
+    const rim = mesh(earcup, new THREE.TorusGeometry(1.42, 0.085, 16, 56), titaniumMat, [
+      side * 0.3,
+      0,
+      0,
+    ]);
+    rim.rotation.y = Math.PI / 2;
+    const pinline = mesh(earcup, new THREE.TorusGeometry(1.47, 0.026, 12, 56), accentMat, [
+      side * 0.1,
+      0,
+      0,
+    ]);
+    pinline.rotation.y = Math.PI / 2;
 
-    const vermilionRing = new THREE.Mesh(
-      new THREE.TorusGeometry(1.42, 0.045, 16, 50),
-      vermilionAccentMat,
-    );
-    vermilionRing.rotation.y = Math.PI / 2;
-    vermilionRing.position.x = side * 0.27;
-    earcup.add(vermilionRing);
-
-    const planarGrille = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.98, 0.98, 0.14, 38),
-      grilleMeshMat,
-    );
-    planarGrille.rotation.z = Math.PI / 2;
-    planarGrille.position.x = side * 0.44;
-    earcup.add(planarGrille);
-
-    const centerMedallion = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.4, 0.4, 0.18, 28),
+    // Outer face: recessed driver grille with concentric micro-rings and a
+    // centre medallion.
+    const grilleDisc = mesh(earcup, new THREE.CylinderGeometry(0.9, 0.9, 0.06, 40), grilleMat, [
+      side * 0.5,
+      0,
+      0,
+    ]);
+    grilleDisc.rotation.z = Math.PI / 2;
+    [0.22, 0.45, 0.68].forEach((radius) => {
+      const ring = mesh(earcup, new THREE.TorusGeometry(radius, 0.012, 8, 36), titaniumMat, [
+        side * 0.54,
+        0,
+        0,
+      ]);
+      ring.rotation.y = Math.PI / 2;
+    });
+    const medallion = mesh(
+      earcup,
+      new THREE.CylinderGeometry(0.3, 0.3, 0.12, 32),
       headphoneRedMat,
+      [side * 0.55, 0, 0],
     );
-    centerMedallion.rotation.z = Math.PI / 2;
-    centerMedallion.position.x = side * 0.46;
-    earcup.add(centerMedallion);
+    medallion.rotation.z = Math.PI / 2;
+    const medallionRing = mesh(earcup, new THREE.TorusGeometry(0.33, 0.02, 10, 32), titaniumMat, [
+      side * 0.55,
+      0,
+      0,
+    ]);
+    medallionRing.rotation.y = Math.PI / 2;
 
-    const cushionGeo = new THREE.TorusGeometry(1.3, 0.46, 26, 44);
-    cushionGeo.scale(1, 1.3, 0.88);
-    const cushion = new THREE.Mesh(cushionGeo, leatherCushionMat);
+    // Inner face: baffle plus the oval leather cushion.
+    const baffle = mesh(earcup, new THREE.CylinderGeometry(1.0, 1.0, 0.05, 40), grilleMat, [
+      -side * 0.3,
+      0,
+      0,
+    ]);
+    baffle.rotation.z = Math.PI / 2;
+    const cushionGeo = new THREE.TorusGeometry(1.28, 0.42, 26, 44);
+    cushionGeo.scale(1, 1.24, 0.9);
+    const cushion = new THREE.Mesh(cushionGeo, leatherMat);
     cushion.rotation.y = Math.PI / 2;
     cushion.position.x = -side * 0.4;
     earcup.add(cushion);
+
+    // Power indicator on the right cup rim.
+    if (!isLeft) {
+      mesh(earcup, new THREE.SphereGeometry(0.05, 12, 12), ledMat, [side * 0.3, -1.36, 0.25]);
+    }
 
     cupAssembly.add(earcup);
     return cupAssembly;
@@ -212,40 +339,107 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     const bud = new THREE.Group();
     const side = isLeft ? -1 : 1;
 
-    const capsuleGeo = new THREE.SphereGeometry(0.54, 32, 24);
-    capsuleGeo.scale(1, 1.25, 0.9);
-    bud.add(new THREE.Mesh(capsuleGeo, earbudRedMat));
+    // Teardrop body lathed around Y, squashed on Z for the in-ear profile.
+    const body = mesh(
+      bud,
+      lathe(
+        [
+          [0.02, 0.6],
+          [0.3, 0.5],
+          [0.48, 0.24],
+          [0.54, -0.02],
+          [0.5, -0.28],
+          [0.4, -0.5],
+          [0.24, -0.6],
+          [0.02, -0.62],
+        ],
+        40,
+      ),
+      ceramicMat,
+    );
+    body.scale.z = 0.88;
 
-    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.23, 0.42, 20), graphiteMat);
+    // Angled nozzle with metal collar, mesh, and a soft silicone tip.
+    const nozzle = new THREE.Group();
     nozzle.rotation.x = 0.52;
     nozzle.rotation.z = side * 0.65;
-    nozzle.position.set(side * 0.34, 0.23, 0.36);
+    nozzle.position.set(side * 0.3, 0.32, 0.4);
+    const nozzleBody = mesh(
+      nozzle,
+      new THREE.CylinderGeometry(0.13, 0.16, 0.18, 24),
+      graphiteMat,
+      [0, 0.02, 0],
+    );
+    nozzleBody.rotation.x = 0;
+    const collar = mesh(
+      nozzle,
+      new THREE.TorusGeometry(0.135, 0.03, 10, 24),
+      titaniumMat,
+      [0, -0.06, 0],
+    );
+    collar.rotation.x = Math.PI / 2;
+    const tipFlange = mesh(
+      nozzle,
+      new THREE.TorusGeometry(0.125, 0.05, 12, 24),
+      leatherMat,
+      [0, 0.14, 0],
+    );
+    tipFlange.rotation.x = Math.PI / 2;
+    mesh(
+      nozzle,
+      new THREE.SphereGeometry(0.13, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2),
+      leatherMat,
+      [0, 0.16, 0],
+    );
     bud.add(nozzle);
 
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.27, 20, 16), leatherCushionMat);
-    tip.scale.set(1, 0.84, 1.3);
-    tip.position.set(side * 0.5, 0.36, 0.62);
-    bud.add(tip);
+    // IR wear sensor on the inner face near the nozzle base.
+    const irSensor = mesh(bud, new THREE.SphereGeometry(0.032, 12, 10), graphiteMat, [
+      side * 0.42,
+      0.05,
+      0.26,
+    ]);
+    irSensor.scale.set(1, 1.4, 0.5);
 
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 1.6, 24), earbudRedMat);
-    stem.position.set(side * 0.11, -0.9, -0.05);
-    stem.rotation.z = side * -0.12;
-    bud.add(stem);
-
-    const baseCap = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.12, 0.12, 0.17, 20),
-      brushedTitaniumMat,
+    // Tapered stem with a rounded bottom and a microphone port.
+    const stem = mesh(
+      bud,
+      lathe(
+        [
+          [0.125, 0.1],
+          [0.12, -0.5],
+          [0.105, -0.85],
+          [0.06, -0.95],
+          [0.02, -0.97],
+        ],
+        32,
+      ),
+      ceramicMat,
+      [side * 0.1, -0.75, -0.02],
     );
-    baseCap.position.set(side * 0.21, -1.7, -0.05);
-    bud.add(baseCap);
+    stem.rotation.z = side * -0.12;
+    const baseRing = mesh(bud, new THREE.TorusGeometry(0.1, 0.018, 10, 24), titaniumMat, [
+      side * 0.115,
+      -1.58,
+      -0.03,
+    ]);
+    baseRing.rotation.x = Math.PI / 2;
+    const micPort = mesh(bud, new THREE.SphereGeometry(0.028, 10, 8), graphiteMat, [
+      side * 0.2,
+      -1.28,
+      0.08,
+    ]);
+    micPort.scale.set(0.5, 1.7, 0.5);
 
-    const touchDot = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), vermilionAccentMat);
-    touchDot.position.set(side * 0.24, -0.56, 0.09);
-    bud.add(touchDot);
-
-    const shellRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.035, 12, 28), headphoneRedMat);
-    shellRing.position.set(0, 0.02, 0.49);
-    bud.add(shellRing);
+    // Touch control dot and the floating shell ring accent.
+    mesh(bud, new THREE.SphereGeometry(0.055, 12, 12), accentMat, [side * 0.36, -0.3, 0.3]);
+    const shellRing = mesh(
+      bud,
+      new THREE.TorusGeometry(0.44, 0.03, 12, 36),
+      headphoneRedMat,
+      [0, 0.05, 0.42],
+    );
+    shellRing.rotation.x = 0.15;
 
     return bud;
   }
@@ -282,7 +476,6 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
 
   function getScrollProgress() {
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const footer = document.querySelector("footer");
     let effectiveMaxScroll = document.documentElement.scrollHeight - window.innerHeight;
     if (footer) {
       const footerTop = footer.getBoundingClientRect().top + scrollTop;
@@ -309,7 +502,9 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
   const heroOffsetX = () => (window.innerWidth <= 1024 ? 0 : 2.6);
 
   const clock = new THREE.Clock();
+  const footer = document.querySelector<HTMLElement>("footer");
   let frame = 0;
+  let canvasOpacity = 1;
 
   function animate() {
     frame = requestAnimationFrame(animate);
@@ -325,12 +520,21 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     targetRotY += (mouseX - targetRotY) * 0.05;
     targetRotX += (mouseY - targetRotX) * 0.05;
 
+    // Retire the rig as the footer rises into view: lift clear of the footer
+    // edge and dissolve, so the products never slide underneath the footer.
+    let exitFactor = 0;
+    if (footer) {
+      const footerRise = window.innerHeight - footer.getBoundingClientRect().top;
+      exitFactor = Math.min(Math.max(footerRise / (window.innerHeight * 0.38), 0), 1);
+    }
+    const exit = smoothstep(exitFactor);
+
     const centerFactor = Math.min(scrollP / 0.32, 1);
     const posX = (1 - centerFactor) * heroOffsetX();
     const posY = (1 - centerFactor) * 0.35 + centerFactor * -0.1;
 
     masterRig.position.x = posX;
-    masterRig.position.y = posY + Math.sin(t * 1.2) * 0.05;
+    masterRig.position.y = posY + Math.sin(t * 1.2) * 0.05 + exit * 1.7;
     masterRig.rotation.y = scrollP * Math.PI * 2.2 + targetRotY;
     masterRig.rotation.x = Math.sin(scrollP * Math.PI) * 0.16 + targetRotX * 0.6;
 
@@ -356,7 +560,14 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     earbudL.position.y = -2.3 + Math.sin(t * 1.4 + 1.2) * 0.08;
     earbudR.position.y = -2.2 + Math.cos(t * 1.3 + 2.0) * 0.08;
 
-    renderer.render(scene, camera);
+    const targetOpacity = 1 - exit;
+    if (targetOpacity !== canvasOpacity) {
+      canvasOpacity = targetOpacity;
+      renderer.domElement.style.opacity = targetOpacity.toFixed(3);
+    }
+    if (targetOpacity > 0) {
+      renderer.render(scene, camera);
+    }
   }
   animate();
 
@@ -373,20 +584,105 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     cancelAnimationFrame(frame);
     window.removeEventListener("mousemove", onMouseMove);
     window.removeEventListener("resize", onResize);
+    envRenderTarget.dispose();
     scene.traverse((obj) => {
-      const mesh = obj as ThreeNS.Mesh;
-      if (mesh.geometry) mesh.geometry.dispose();
+      const asMesh = obj as ThreeNS.Mesh;
+      if (asMesh.geometry) asMesh.geometry.dispose();
     });
     [
-      graphiteMat,
-      brushedTitaniumMat,
-      leatherCushionMat,
-      grilleMeshMat,
-      vermilionAccentMat,
       headphoneRedMat,
-      earbudRedMat,
+      ceramicMat,
+      titaniumMat,
+      graphiteMat,
+      leatherMat,
+      grilleMat,
+      accentMat,
+      threadMat,
+      ledMat,
     ].forEach((m) => m.dispose());
     renderer.dispose();
     renderer.domElement.remove();
   };
+}
+
+/**
+ * Bakes a small gradient room with three HDR softboxes into a PMREM texture so
+ * the clearcoat and metal materials have something believable to reflect.
+ */
+function buildEnvironment(
+  THREE: Three,
+  renderer: ThreeNS.WebGLRenderer,
+): ThreeNS.WebGLRenderTarget {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new THREE.Scene();
+
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(60, 32, 20),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      uniforms: {
+        topColor: { value: new THREE.Color(0xffffff) },
+        midColor: { value: new THREE.Color(0xdfe7f0) },
+        bottomColor: { value: new THREE.Color(0xb9c3cd) },
+      },
+      vertexShader: `
+        varying vec3 vDir;
+        void main() {
+          vDir = normalize(position);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vDir;
+        uniform vec3 topColor;
+        uniform vec3 midColor;
+        uniform vec3 bottomColor;
+        void main() {
+          float h = clamp(vDir.y * 0.5 + 0.5, 0.0, 1.0);
+          vec3 c = h > 0.5
+            ? mix(midColor, topColor, h * 2.0 - 1.0)
+            : mix(bottomColor, midColor, h * 2.0);
+          gl_FragColor = vec4(c, 1.0);
+        }
+      `,
+    }),
+  );
+  envScene.add(sky);
+
+  const softbox = (x: number, y: number, z: number, w: number, h: number, intensity: number) => {
+    const panel = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.ShaderMaterial({
+        uniforms: { uIntensity: { value: intensity } },
+        vertexShader: `
+          void main() {
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float uIntensity;
+          void main() {
+            gl_FragColor = vec4(vec3(uIntensity), 1.0);
+          }
+        `,
+        side: THREE.DoubleSide,
+      }),
+    );
+    panel.position.set(x, y, z);
+    panel.lookAt(0, 0, 0);
+    envScene.add(panel);
+  };
+
+  softbox(-18, 14, 16, 22, 14, 3.4); // key softbox, upper left front
+  softbox(20, 6, 10, 16, 10, 2.1); // fill, right
+  softbox(0, -16, -14, 26, 12, 1.0); // dim bounce from below
+
+  const renderTarget = pmrem.fromScene(envScene, 0.045);
+  pmrem.dispose();
+  envScene.traverse((obj) => {
+    const asMesh = obj as ThreeNS.Mesh;
+    if (asMesh.geometry) asMesh.geometry.dispose();
+    if (asMesh.material) (asMesh.material as ThreeNS.Material).dispose();
+  });
+  return renderTarget;
 }

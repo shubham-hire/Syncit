@@ -10,11 +10,11 @@ import { ArrowIcon, BrandMark, DownloadIcon } from "./icons";
 
 function SectionHead({ num, title }: { num: string; title: string }) {
   return (
-    <div className="sec-head">
+    <div className="sec-head" data-reveal="up">
       <h2 className="k">
         <b>{num}</b> — {title}
       </h2>
-      <span className="rule-line" />
+      <span className="rule-line" data-reveal="line" data-reveal-delay="160" />
     </div>
   );
 }
@@ -94,19 +94,21 @@ export function ProtocolSection() {
     <section className="sec" id="gate">
       <SectionHead num="01" title="How SyncIt Is Designed" />
       <div className="gate-grid">
-        <h3 className="display h-sec">Share one local audio session without sharing headphones.</h3>
+        <h3 className="display h-sec" data-reveal="up">
+          Share one local audio session without sharing headphones.
+        </h3>
         <div className="gate-copy">
-          <p className="lead">
+          <p className="lead" data-reveal="up">
             SyncIt is designed for small groups that want to hear the same audio while using their
             own devices. The intended first path is a Windows host sending timestamped audio over a
             local network to approved Android listeners.
           </p>
-          <p className="body-copy">
+          <p className="body-copy" data-reveal="up" data-reveal-delay="110">
             The current UI accepts a mock session code and models approval and playback controls. QR
             support, network transport, and Android playback are planned integrations; internet
             access is not part of the intended core experience.
           </p>
-          <a className="arrowlink" href="#pathways">
+          <a className="arrowlink" href="#pathways" data-reveal="up" data-reveal-delay="220">
             <span>See the host and listener flows</span>
             <span className="ar">
               <ArrowIcon />
@@ -115,21 +117,21 @@ export function ProtocolSection() {
         </div>
       </div>
       <div className="gate-stats">
-        <div>
+        <div data-reveal="up">
           <b>2–5</b>
           <span className="lbl">Target listeners</span>
         </div>
-        <div>
+        <div data-reveal="up" data-reveal-delay="90">
           <b>Local</b>
           <span className="lbl">Wi-Fi session</span>
         </div>
-        <div>
+        <div data-reveal="up" data-reveal-delay="180">
           <b>
             20–50<small>ms</small>
           </b>
           <span className="lbl">PRD target after calibration</span>
         </div>
-        <div>
+        <div data-reveal="up" data-reveal-delay="270">
           <b>1</b>
           <span className="lbl">Windows host first</span>
         </div>
@@ -143,8 +145,13 @@ export function ReceiversSection() {
     <section className="sec" id="pathways">
       <SectionHead num="02" title="Host and Listener Flows" />
       <div className="cards-mosaic">
-        {receivers.map((r) => (
-          <article className="rcard" key={r.title}>
+        {receivers.map((r, i) => (
+          <article
+            className="rcard"
+            key={r.title}
+            data-reveal="up"
+            data-reveal-delay={String(i * 130)}
+          >
             <div className="rcard-fr">
               <img alt={r.alt} loading="lazy" referrerPolicy="no-referrer" src={r.src} />
               <span className="rcard-tag">{r.tag}</span>
@@ -170,15 +177,17 @@ export function HallmarksSection() {
     <section className="sec" id="lessons">
       <SectionHead num="03" title="The Pieces Behind Synchronized Listening" />
       <div className="cur-head">
-        <h3 className="display h-sec">Model the path. Buffer the stream. Adjust per listener.</h3>
-        <p className="body-lg">
+        <h3 className="display h-sec" data-reveal="up">
+          Model the path. Buffer the stream. Adjust per listener.
+        </h3>
+        <p className="body-lg" data-reveal="up" data-reveal-delay="120">
           SyncIt separates host capture, network jitter, and device output delay in its design so
           each part can be measured when the real integrations arrive.
         </p>
       </div>
       <div className="cur">
         {hallmarks.map((h, i) => (
-          <div className="les" key={h.title}>
+          <div className="les" key={h.title} data-reveal="up" data-reveal-delay={String(i * 90)}>
             <span className="k">{String(i + 1).padStart(2, "0")}</span>
             <h3>{h.title}</h3>
             <p>{h.text}</p>
@@ -194,22 +203,31 @@ export function HallmarksSection() {
 export function BundleSection() {
   return (
     <section className="sec fin" id="eternity">
-      <div className="eyebrow">Chapter 04 — Try the Prototype</div>
-      <h2 className="display">
+      <div className="eyebrow" data-reveal="up">
+        Chapter 04 — Try the Prototype
+      </div>
+      <h2 className="display" data-reveal="up" data-reveal-delay="90">
         Explore
         <br />
         SyncIt
       </h2>
-      <p className="body-lg">
+      <p className="body-lg" data-reveal="up" data-reveal-delay="190">
         The current build includes a Flutter interaction prototype, Rust packet and timing
         primitives, and an offline simulator. Real Windows capture, Opus transport, and Android
         background playback are the next integration steps.
       </p>
-      <a className="cta" href={downloadAction.href} rel="noreferrer" target="_blank">
+      <a
+        className="cta"
+        href={downloadAction.href}
+        rel="noreferrer"
+        target="_blank"
+        data-reveal="up"
+        data-reveal-delay="300"
+      >
         <span>{downloadAction.label}</span>
         <DownloadIcon />
       </a>
-      <p className="download-note">
+      <p className="download-note" data-reveal="up" data-reveal-delay="400">
         Download the latest Windows or Android build from GitHub Releases. The release page will be
         updated as the real audio integration becomes available.
       </p>
@@ -221,15 +239,15 @@ export function SiteFooter() {
   return (
     <footer className="foot">
       <div className="foot-grid">
-        <div className="foot-brand">
+        <div className="foot-brand" data-reveal="up">
           <BrandMark withBase={false} />
           <p>
             SyncIt is a student-built local audio-sharing prototype for small groups using their own
             devices and headphones.
           </p>
         </div>
-        {footerColumns.map((col) => (
-          <div key={col.title}>
+        {footerColumns.map((col, i) => (
+          <div key={col.title} data-reveal="up" data-reveal-delay={String(i * 100)}>
             <h4>{col.title}</h4>
             <ul>
               {col.links.map((l) => (

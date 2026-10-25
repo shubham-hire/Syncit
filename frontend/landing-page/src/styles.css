@@ -1252,6 +1252,76 @@
   }
 }
 
+/* ---------------------------------------------
+     Entrance choreography (plays once on load).
+     Scroll reveals are driven by use-reveal.ts.
+     --------------------------------------------- */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes nav-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nav {
+  animation: nav-drop 0.7s var(--ease-out) 0.1s backwards;
+}
+
+.hero-top > * {
+  animation: rise-in 0.95s var(--ease-out) backwards;
+}
+.hero-top > .eyebrow {
+  animation-delay: 0.08s;
+}
+.hero-top > .h-hero {
+  animation-delay: 0.18s;
+}
+.hero-top > .hero-sub {
+  animation-delay: 0.32s;
+}
+.hero-top > .hero-sync-status {
+  animation-delay: 0.44s;
+}
+.hero-top > .hero-model-container {
+  animation-delay: 0.5s;
+}
+.hero-top > .hero-action {
+  animation-delay: 0.56s;
+}
+.hero-top > .hero-download {
+  animation-delay: 0.64s;
+}
+
+.hero-foot .hero-cue {
+  animation: rise-in 0.9s var(--ease-out) 0.9s backwards;
+}
+.hero-foot .chip:nth-child(1) {
+  animation: rise-in 0.9s var(--ease-out) 0.78s backwards;
+}
+.hero-foot .chip:nth-child(2) {
+  animation: rise-in 0.9s var(--ease-out) 0.86s backwards;
+}
+.hero-foot .chip:nth-child(3) {
+  animation: rise-in 0.9s var(--ease-out) 0.94s backwards;
+}
+.hero-foot .chip:nth-child(4) {
+  animation: rise-in 0.9s var(--ease-out) 1.02s backwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -1260,8 +1330,10 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
   }
 }
