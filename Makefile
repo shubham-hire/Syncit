@@ -26,7 +26,7 @@ test-landing:
 format-check:
 	$(CARGO) fmt --all -- --check
 	command -v $(FLUTTER) >/dev/null 2>&1 || (echo "Flutter is required for Dart formatting checks" && exit 1)
-	cd frontend/flutter-app && $(FLUTTER) format --set-exit-if-changed lib test
+	cd frontend/flutter-app && $(FLUTTER) dart format --set-exit-if-changed lib test
 
 lint:
 	$(CARGO) clippy --workspace --all-targets --locked -- -D warnings

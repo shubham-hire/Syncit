@@ -406,6 +406,14 @@ impl<T> JitterBuffer<T> {
         Some(packet)
     }
 
+    /// Borrows the next packet without advancing the playback cursor.
+    pub fn peek_next(&self) -> Option<&T> {
+        let next = self
+            .next_sequence
+            .or_else(|| self.packets.keys().next().copied())?;
+        self.packets.get(&next)
+    }
+
     pub fn skip_missing(&mut self) -> bool {
         let Some(next) = self.next_sequence else {
             return false;

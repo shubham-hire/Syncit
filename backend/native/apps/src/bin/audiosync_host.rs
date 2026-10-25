@@ -61,18 +61,21 @@ fn run() -> Result<(), CliError> {
     let auto_approve = !args.flag("manual-approve");
 
     #[cfg(windows)]
-    let (source_kind, source) = if args.flag("synthetic") {
-        (
-            "synthetic tone",
-            audiosync_audio::SyntheticPcmSource::new(220.0),
-        )
-    } else {
-        (
-            "WASAPI loopback",
-            audiosync_audio::WasapiCapture::default_loopback()
-                .map_err(|error| format!("WASAPI capture unavailable: {error}"))?,
-        )
-    };
+    let (source_kind, source): (&str, Box<dyn audiosync_audio::PcmSource + Send>) =
+        if args.flag("synthetic") {
+            (
+                "synthetic tone",
+                Box::new(audiosync_audio::SyntheticPcmSource::new(220.0)),
+            )
+        } else {
+            (
+                "WASAPI loopback",
+                Box::new(
+                    audiosync_audio::WasapiCapture::default_loopback()
+                        .map_err(|error| format!("WASAPI capture unavailable: {error}"))?,
+                ),
+            )
+        };
 
     #[cfg(not(windows))]
     let (source_kind, source) = {

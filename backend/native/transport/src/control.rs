@@ -75,6 +75,7 @@ const HEARTBEAT: u8 = 7;
 const CLOCK_SYNC_REQUEST: u8 = 8;
 const CLOCK_SYNC_RESPONSE: u8 = 9;
 const SESSION_ENDED: u8 = 10;
+const LEAVE_REQUEST: u8 = 11;
 
 /// Local control messages exchanged while a session is being established and
 /// maintained.
@@ -120,6 +121,10 @@ pub enum ControlMessage {
         session_id: SessionId,
         reason: u8,
     },
+    LeaveRequest {
+        session_id: SessionId,
+        listener_id: ListenerId,
+    },
 }
 
 impl ControlMessage {
@@ -135,7 +140,8 @@ impl ControlMessage {
             | Self::Heartbeat { session_id }
             | Self::ClockSyncRequest { session_id, .. }
             | Self::ClockSyncResponse { session_id, .. }
-            | Self::SessionEnded { session_id, .. } => *session_id,
+            | Self::SessionEnded { session_id, .. }
+            | Self::LeaveRequest { session_id, .. } => *session_id,
         }
     }
 
@@ -180,6 +186,9 @@ impl ControlMessage {
                 bytes.extend_from_slice(&client_sent_micros.to_be_bytes());
                 bytes.extend_from_slice(&host_received_micros.to_be_bytes());
                 bytes.extend_from_slice(&host_sent_micros.to_be_bytes());
+            }
+            Self::LeaveRequest { listener_id, .. } => {
+                bytes.extend_from_slice(listener_id.as_bytes());
             }
         }
 
@@ -255,6 +264,7 @@ impl ControlMessage {
             Self::ClockSyncRequest { .. } => (CLOCK_SYNC_REQUEST, 8),
             Self::ClockSyncResponse { .. } => (CLOCK_SYNC_RESPONSE, 24),
             Self::SessionEnded { .. } => (SESSION_ENDED, 1),
+            Self::LeaveRequest { .. } => (LEAVE_REQUEST, LISTENER_ID_LEN),
         }
     }
 }
@@ -272,6 +282,7 @@ fn is_known_message_type(message_type: u8) -> bool {
             | CLOCK_SYNC_REQUEST
             | CLOCK_SYNC_RESPONSE
             | SESSION_ENDED
+            | LEAVE_REQUEST
     )
 }
 
@@ -373,6 +384,15 @@ fn decode_payload(
             Ok(ControlMessage::SessionEnded {
                 session_id,
                 reason: payload[0],
+            })
+        }
+        LEAVE_REQUEST => {
+            expect_payload_len(message_type, LISTENER_ID_LEN, payload.len())?;
+            let mut listener_id = [0_u8; LISTENER_ID_LEN];
+            listener_id.copy_from_slice(payload);
+            Ok(ControlMessage::LeaveRequest {
+                session_id,
+                listener_id: ListenerId::new(listener_id),
             })
         }
         _ => Err(ControlMessageError::UnknownMessageType(message_type)),
@@ -520,6 +540,10 @@ mod tests {
             ControlMessage::SessionEnded {
                 session_id,
                 reason: 9,
+            },
+            ControlMessage::LeaveRequest {
+                session_id,
+                listener_id,
             },
         ]
     }

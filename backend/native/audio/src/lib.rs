@@ -22,6 +22,19 @@ pub trait PcmSource {
     fn read_frame(&mut self, pcm: &mut [i16]) -> Result<(), AudioSourceError>;
 }
 
+/// Boxing lets callers pick between sources (synthetic vs. a platform
+/// capture) at runtime while keeping one concrete `S` for
+/// `HostRuntime`/`spawn_host_loop`.
+impl<S: PcmSource + ?Sized> PcmSource for Box<S> {
+    fn config(&self) -> CodecConfig {
+        (**self).config()
+    }
+
+    fn read_frame(&mut self, pcm: &mut [i16]) -> Result<(), AudioSourceError> {
+        (**self).read_frame(pcm)
+    }
+}
+
 /// Errors returned while opening or reading a PCM source.
 #[derive(Debug)]
 pub enum AudioSourceError {
@@ -405,6 +418,18 @@ mod tests {
         assert!(second.iter().any(|sample| *sample != 0));
         assert_eq!(source.sample_cursor(), (FRAME_PCM_SAMPLES * 2) as u64);
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn boxed_source_delegates_to_the_inner_source() {
+        let mut source: Box<dyn PcmSource + Send> = Box::new(SyntheticPcmSource::new(220.0));
+        assert_eq!(source.config().sample_rate_hz, 48_000);
+
+        let mut frame = vec![0_i16; FRAME_PCM_SAMPLES];
+        source
+            .read_frame(&mut frame)
+            .expect("boxed source should read through to the inner source");
+        assert!(frame.iter().any(|sample| *sample != 0));
     }
 
     #[test]

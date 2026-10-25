@@ -1,5 +1,69 @@
 # Changelog
 
+## October 25, 2026 — Windows fix + Milestone 5 wiring (local session)
+
+Implemented and gated on the Windows development machine. Committed locally;
+**not pushed yet**.
+
+### Windows CI failure root-caused and fixed
+
+- The remaining Windows-only compile error was E0308 in the two
+  `#[cfg(windows)]` source-selection sites: the if/else arms produced
+  `SyntheticPcmSource` vs `WasapiCapture` — two different concrete types.
+  Linux CI stayed green because the `#[cfg(not(windows))]` fallback uses only
+  the synthetic source. Files: `apps/src/bin/audiosync_host.rs` and
+  `ffi/src/lib.rs`.
+- Fix: `audiosync-audio` now implements `PcmSource for Box<S>` (blanket
+  delegation, unit-tested), and both call sites type the selection as
+  `Box<dyn PcmSource + Send>`, which satisfies `spawn_host_loop`'s
+  `PcmSource + Send + 'static` bound (both sources are Send; the documented
+  `unsafe impl Send for WasapiCapture` covers the WASAPI case).
+- **Full gate green on Windows for the first time**: fmt, clippy
+  `-D warnings`, all 68 tests (previously Windows ran compile-only),
+  build, and `AudioSync simulator PASS`.
+
+### Milestone 5 — Flutter pages wired to the engine
+
+- Generated the platform scaffolding with Flutter 3.47.8
+  (`flutter create --platforms=android,windows .`; `lib/` and `test/`
+  untouched; `.fvmrc` bumped 3.47.7 → 3.47.8) and added `flutter_lints`.
+- `host_session_page.dart` now calls `EngineController.create()`:
+  engine mode starts the real WASAPI host (`autoApprove: false`), polls
+  events, and drives the listener list/approve/remove through
+  `HostEvent.parse`d `ListenerJoined`/`ListenerApproved`/`ListenerRemoved`
+  /`ListenerTimedOut` events; mock mode keeps the exact prior behavior the
+  widget tests assert.
+- `listener_join_page.dart`: engine mode collects host address plus
+  session/token hex, joins, and renders live state, rendered/concealed
+  frames, buffer depth and RTT; the delay slider applies live via
+  `pumpListener(delayMs:)`. Volume stays local until the platform output
+  exists (Milestone 6).
+- Fixed a latent Dart defect caught by first-ever `flutter analyze`:
+  `package:ffi/ffi.dart show malloc` hid the `Utf8` type and extension
+  methods `ffi_bindings.dart` itself uses — the bindings could never have
+  compiled. Analyze is now clean (`flutter_lints`).
+- Engine library discovery hardened: candidates are found by walking up
+  from both the working directory and the script location to
+  `target/release/` (workspace build) and the crate-local fallback, so
+  `flutter run` and `dart run` both work; widget tests always run in mock
+  mode (`FLUTTER_TEST` guard) so the suite stays deterministic on machines
+  where the DLL exists.
+- Verified end-to-end on Windows: `audiosync_ffi.dll` loads through the Dart
+  bindings, a host session starts over real UDP, and the session/token hex
+  return; `flutter build windows --debug` succeeds; `Makefile format-check`
+  uses `dart format` (`flutter format` no longer exists).
+
+### Follow-up — FFI lifecycle hardening
+
+- Added a versioned `LeaveRequest` control message and host-side handling so a
+  listener leaves cleanly instead of sending a duplicate join.
+- Host command actions now retain approval/removal events, and ending a host
+  loop stops its worker deterministically.
+- Added `audiosync_ffi_host_stop`, explicit Dart host cleanup, listener slot
+  release, and regression coverage for repeated host/listener handle reuse.
+- Platform-neutral Rust, Flutter, and simulator checks pass; live WASAPI,
+  Windows UI, hotspot, and Android playback validation remain hardware work.
+
 ## October 25, 2026 — automation session
 
 Everything below was implemented, gated (`cargo fmt --check`,

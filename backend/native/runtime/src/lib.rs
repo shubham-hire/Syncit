@@ -26,7 +26,7 @@ mod playback;
 
 pub use host_loop::{
     CommandChannelClosed, HostCommand, HostLoopConfig, HostLoopError, HostLoopHandle,
-    spawn_host_loop,
+    HostLoopStartError, spawn_host_loop, spawn_host_loop_with_factory,
 };
 pub use playback::{
     NullSink, PcmSink, PlaybackConfig, PlaybackError, PlaybackScheduler, PlaybackStats,
@@ -452,6 +452,15 @@ impl ListenerAudioPipeline {
         self.jitter.next_sequence()
     }
 
+    /// Returns the host-clock timestamp of the next buffered packet without
+    /// consuming it. The playback scheduler uses this to map the host timeline
+    /// onto the listener's local monotonic clock.
+    pub fn next_packet_timestamp_micros(&self) -> Option<u64> {
+        self.jitter
+            .peek_next()
+            .map(|packet| packet.timestamp_micros)
+    }
+
     pub fn ingest_datagram(&mut self, datagram: &[u8]) -> Result<PushResult, ListenerAudioError> {
         let packet = AudioPacket::decode(datagram).map_err(|error| {
             self.metrics.invalid_packets = self.metrics.invalid_packets.saturating_add(1);
@@ -699,6 +708,15 @@ impl ListenerRuntime {
 
     pub fn send_heartbeat(&self) -> Result<bool, ListenerRuntimeError> {
         let Some(action) = self.session.heartbeat_action() else {
+            return Ok(false);
+        };
+        self.send_action(action)?;
+        Ok(true)
+    }
+
+    /// Sends a clean departure request when the listener has joined the host.
+    pub fn send_leave(&self) -> Result<bool, ListenerRuntimeError> {
+        let Some(action) = self.session.leave_action() else {
             return Ok(false);
         };
         self.send_action(action)?;
@@ -1029,8 +1047,21 @@ mod tests {
                 sequence: 0,
                 ref pcm,
                 ..
-            } if pcm.len() == FRAME_PCM_SAMPLES
+                } if pcm.len() == FRAME_PCM_SAMPLES
         ));
+
+        assert!(listener.send_leave().expect("listener leave should send"));
+        let leave_events = host
+            .receive_control_once(Instant::now(), 0, 0)
+            .expect("host should process listener leave");
+        assert!(leave_events.iter().any(|event| matches!(
+            event,
+            SessionEvent::ListenerRemoved { listener_id: id, .. } if *id == listener_id
+        )));
+        assert_eq!(
+            host.session().listener_state(listener_id),
+            Some(audiosync_session::HostListenerState::Removed)
+        );
     }
 
     #[test]

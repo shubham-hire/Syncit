@@ -318,6 +318,9 @@ impl HostSession {
             ControlMessage::ClockSyncRequest {
                 client_sent_micros, ..
             } => self.handle_clock_sync_request(source, client_sent_micros, now),
+            ControlMessage::LeaveRequest { listener_id, .. } => {
+                self.handle_leave(source, listener_id)
+            }
             ControlMessage::JoinPending { .. }
             | ControlMessage::JoinAccepted { .. }
             | ControlMessage::JoinRejected { .. }
@@ -502,6 +505,43 @@ impl HostSession {
         )]
     }
 
+    fn handle_leave(&mut self, source: SocketAddr, listener_id: ListenerId) -> Vec<SessionAction> {
+        let Some(listener) = self.listeners.get_mut(&source) else {
+            self.metrics.unknown_endpoints = self.metrics.unknown_endpoints.saturating_add(1);
+            return vec![SessionAction::Event(SessionEvent::MessageIgnored {
+                endpoint: source,
+                reason: IgnoreReason::UnknownEndpoint,
+            })];
+        };
+
+        if listener.listener_id != listener_id {
+            self.metrics.invalid_messages = self.metrics.invalid_messages.saturating_add(1);
+            return vec![SessionAction::Event(SessionEvent::MessageIgnored {
+                endpoint: source,
+                reason: IgnoreReason::UnknownListener,
+            })];
+        }
+
+        if matches!(
+            listener.state,
+            HostListenerState::Removed | HostListenerState::TimedOut
+        ) {
+            self.metrics.invalid_messages = self.metrics.invalid_messages.saturating_add(1);
+            return vec![SessionAction::Event(SessionEvent::MessageIgnored {
+                endpoint: source,
+                reason: IgnoreReason::InvalidState,
+            })];
+        }
+
+        listener.state = HostListenerState::Removed;
+        self.metrics.removals = self.metrics.removals.saturating_add(1);
+        self.update_active_listener_count();
+        vec![SessionAction::Event(SessionEvent::ListenerRemoved {
+            endpoint: source,
+            listener_id,
+        })]
+    }
+
     /// Creates a clock-sync response after the caller records host receive and
     /// send timestamps from its monotonic clock.
     pub fn respond_to_clock_sync(
@@ -571,13 +611,20 @@ impl HostSession {
             self.metrics.approvals = self.metrics.approvals.saturating_add(1);
             self.update_active_listener_count();
         }
-        Ok(vec![SessionAction::Outbound {
+        let mut actions = vec![SessionAction::Outbound {
             destination: endpoint,
             message: ControlMessage::ListenerApproved {
                 session_id: self.session_id,
                 listener_id,
             },
-        }])
+        }];
+        if was_pending {
+            actions.push(SessionAction::Event(SessionEvent::ListenerApproved {
+                endpoint,
+                listener_id,
+            }));
+        }
+        Ok(actions)
     }
 
     /// Removes a listener. Repeating removal is safe and does not count as a
@@ -831,6 +878,22 @@ impl ListenerSession {
         })
     }
 
+    /// Requests a clean listener departure from the host.
+    pub fn leave_action(&self) -> Option<SessionAction> {
+        let listener_id = self.listener_id?;
+        matches!(
+            self.state,
+            ListenerState::PendingApproval | ListenerState::Active
+        )
+        .then_some(SessionAction::Outbound {
+            destination: self.host_endpoint,
+            message: ControlMessage::LeaveRequest {
+                session_id: self.session_id,
+                listener_id,
+            },
+        })
+    }
+
     pub fn clock_sync_action(&self, client_sent_micros: i64) -> Option<SessionAction> {
         matches!(
             self.state,
@@ -962,7 +1025,9 @@ impl ListenerSession {
                     self.state,
                 ))])
             }
-            ControlMessage::JoinRequest { .. } | ControlMessage::ClockSyncRequest { .. } => {
+            ControlMessage::JoinRequest { .. }
+            | ControlMessage::ClockSyncRequest { .. }
+            | ControlMessage::LeaveRequest { .. } => {
                 self.metrics.invalid_messages = self.metrics.invalid_messages.saturating_add(1);
                 Ok(vec![SessionAction::Event(SessionEvent::MessageIgnored {
                     endpoint: source,
@@ -1061,12 +1126,61 @@ mod tests {
             outbound_message(&approval_actions),
             ControlMessage::ListenerApproved { listener_id: id, .. } if id == listener_id
         ));
+        assert!(approval_actions.iter().any(|action| matches!(
+            action,
+            SessionAction::Event(SessionEvent::ListenerApproved {
+                endpoint: event_endpoint,
+                listener_id: event_id,
+            }) if *event_endpoint == endpoint && *event_id == listener_id
+        )));
         assert_eq!(
             host.listener_state(listener_id),
             Some(HostListenerState::Active)
         );
         assert_eq!(host.metrics().approvals, 1);
         assert_eq!(host.metrics().active_listeners, 1);
+    }
+
+    #[test]
+    fn listener_leave_marks_the_endpoint_removed_without_an_outbound_join() {
+        let endpoint = listener_endpoint(40_001);
+        let now = Instant::now();
+        let mut host = HostSession::new(session_id(), token(), 1);
+
+        host.handle_message(
+            endpoint,
+            ControlMessage::JoinRequest {
+                session_id: session_id(),
+                token: token(),
+            },
+            now,
+        );
+        let listener_id = host.listener_id_for(endpoint).expect("listener exists");
+        host.approve_listener(listener_id)
+            .expect("listener can be approved");
+
+        let actions = host.handle_message(
+            endpoint,
+            ControlMessage::LeaveRequest {
+                session_id: session_id(),
+                listener_id,
+            },
+            now + Duration::from_millis(1),
+        );
+
+        assert!(matches!(
+            actions.as_slice(),
+            [SessionAction::Event(SessionEvent::ListenerRemoved {
+                endpoint: event_endpoint,
+                listener_id: event_id,
+            })] if *event_endpoint == endpoint && *event_id == listener_id
+        ));
+        assert_eq!(
+            host.listener_state(listener_id),
+            Some(HostListenerState::Removed)
+        );
+        assert_eq!(host.metrics().active_listeners, 0);
+        assert_eq!(host.metrics().removals, 1);
     }
 
     #[test]
@@ -1255,6 +1369,17 @@ mod tests {
             .handle_message(host_endpoint, outbound_message(&approval), None)
             .expect("listener accepts approval");
         assert_eq!(listener.state(), ListenerState::Active);
+
+        assert!(matches!(
+            listener.leave_action(),
+            Some(SessionAction::Outbound {
+                destination,
+                message: ControlMessage::LeaveRequest {
+                    listener_id: actual_id,
+                    ..
+                },
+            }) if destination == host_endpoint && actual_id == listener_id
+        ));
 
         let sync_request = listener
             .clock_sync_action(0)

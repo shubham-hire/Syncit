@@ -156,12 +156,22 @@ impl PlaybackScheduler {
         self.stats
     }
 
-    /// Replaces the tuning configuration (for example a new manual delay).
+    /// Replaces the tuning configuration while preserving timed cadence.
     ///
-    /// Timed cadence deadlines and the render timeline are preserved; only
-    /// future decisions use the new values.
+    /// A changed listener delay shifts the active render timeline by the same
+    /// delta. Other cadence deadlines remain untouched.
     pub fn set_config(&mut self, config: PlaybackConfig) {
+        let previous_delay = self.config.listener_delay;
         self.config = config;
+        self.shift_next_due(previous_delay, config.listener_delay);
+    }
+
+    /// Applies a manual calibration delay without resetting the other playback
+    /// settings that were chosen when the listener started.
+    pub fn set_listener_delay(&mut self, delay: Duration) {
+        let previous_delay = self.config.listener_delay;
+        self.config.listener_delay = delay;
+        self.shift_next_due(previous_delay, delay);
     }
 
     /// Drains session/control events surfaced by the last pumps.
@@ -184,11 +194,9 @@ impl PlaybackScheduler {
             let now = Instant::now();
             let Some(due) = self.next_due else {
                 if runtime.pipeline().buffered_packets() > 0 {
-                    // Arm the timeline on the first buffered packet: the
-                    // pre-roll absorbs jitter, the delay applies manual
-                    // calibration.
-                    self.next_due =
-                        Some(now + self.config.target_buffer + self.config.listener_delay);
+                    // Prefer the host packet timeline when clock sync is
+                    // available. Until then, fall back to local arrival time.
+                    self.next_due = Some(self.arm_timeline(runtime, now));
                     continue;
                 }
                 break;
@@ -321,6 +329,59 @@ impl PlaybackScheduler {
     fn frame_duration(&self) -> Duration {
         Duration::from_micros(self.config.frame_duration_micros)
     }
+
+    fn arm_timeline(&self, runtime: &ListenerRuntime, now: Instant) -> Instant {
+        let timeline_base = runtime
+            .pipeline()
+            .next_packet_timestamp_micros()
+            .and_then(|timestamp| {
+                runtime
+                    .session()
+                    .clock_offset_micros()
+                    .map(|offset| (timestamp, offset))
+            })
+            .and_then(|(timestamp, offset)| host_timestamp_to_instant(timestamp, offset, now))
+            .unwrap_or(now);
+        let with_buffer = timeline_base
+            .checked_add(self.config.target_buffer)
+            .unwrap_or(timeline_base);
+        with_buffer
+            .checked_add(self.config.listener_delay)
+            .unwrap_or(with_buffer)
+    }
+
+    fn shift_next_due(&mut self, previous: Duration, next: Duration) {
+        let Some(due) = self.next_due else {
+            return;
+        };
+        if next > previous {
+            self.next_due = due.checked_add(next - previous).or(Some(due));
+        } else if previous > next {
+            self.next_due = Some(
+                due.checked_sub(previous - next)
+                    .unwrap_or_else(Instant::now),
+            );
+        }
+    }
+}
+
+/// Converts a host packet timestamp into a listener-local monotonic deadline.
+/// `offset_micros` is host-minus-listener, matching the clock estimator's
+/// contract.
+fn host_timestamp_to_instant(
+    host_timestamp_micros: u64,
+    offset_micros: i64,
+    now: Instant,
+) -> Option<Instant> {
+    let host_timestamp_micros = i64::try_from(host_timestamp_micros).ok()?;
+    let listener_timestamp_micros = host_timestamp_micros.checked_sub(offset_micros)?;
+    let local_now_micros = monotonic_micros();
+    let delta_micros = listener_timestamp_micros.checked_sub(local_now_micros)?;
+    if delta_micros >= 0 {
+        now.checked_add(Duration::from_micros(delta_micros as u64))
+    } else {
+        now.checked_sub(Duration::from_micros(delta_micros.unsigned_abs()))
+    }
 }
 
 fn frame_pcm(frame: &ListenerAudioFrame) -> &[i16] {
@@ -398,6 +459,120 @@ mod tests {
         assert_eq!(sink.frames_written, 5);
         assert_eq!(scheduler.stats().rendered_frames, 5);
         assert_eq!(scheduler.stats().concealed_frames, 0);
+    }
+
+    #[test]
+    fn scheduler_uses_clock_synced_packet_timestamp_for_initial_deadline() {
+        let sender = UdpTransport::bind("127.0.0.1:0").expect("sender binds");
+        let host_endpoint = sender.local_addr().expect("host address");
+        let mut listener = ListenerRuntime::new(
+            "127.0.0.1:0",
+            session_id(),
+            token(),
+            host_endpoint,
+            CodecConfig::default(),
+            8,
+        )
+        .expect("listener runtime initializes");
+        listener
+            .set_read_timeout(Some(Duration::from_millis(2)))
+            .expect("listener timeout configures");
+
+        let listener_id = ListenerId::new([0x08; 16]);
+        {
+            let session = listener.session_mut();
+            let _ = session.handle_message(
+                host_endpoint,
+                ControlMessage::JoinAccepted {
+                    session_id: session_id(),
+                    listener_id,
+                },
+                None,
+            );
+            let _ = session.handle_message(
+                host_endpoint,
+                ControlMessage::ListenerApproved {
+                    session_id: session_id(),
+                    listener_id,
+                },
+                None,
+            );
+            let _ = session.handle_message(
+                host_endpoint,
+                ControlMessage::ClockSyncResponse {
+                    session_id: session_id(),
+                    client_sent_micros: 0,
+                    host_received_micros: 5,
+                    host_sent_micros: 5,
+                },
+                Some(10),
+            );
+        }
+        assert_eq!(listener.session().clock_offset_micros(), Some(0));
+
+        let capture_start = monotonic_micros() as u64 + 120_000;
+        let mut pump = AudioPacketPump::new(
+            SyntheticPcmSource::new(440.0),
+            session_id(),
+            token().into_bytes(),
+            capture_start,
+        )
+        .expect("pump initializes");
+        let packet = pump.next_packet().expect("packet encodes");
+        send_packet(
+            &sender,
+            &packet,
+            listener.local_addr().expect("listener address"),
+        );
+
+        let mut scheduler = PlaybackScheduler::new(PlaybackConfig {
+            target_buffer: Duration::ZERO,
+            conceal_grace: Duration::from_millis(20),
+            ..PlaybackConfig::default()
+        });
+        let mut sink = NullSink::default();
+        let started = Instant::now();
+        scheduler
+            .pump(&mut listener, &mut sink)
+            .expect("initial pump succeeds");
+        assert_eq!(sink.frames_written, 0);
+
+        let deadline = started + Duration::from_secs(2);
+        while sink.frames_written < 1 && Instant::now() < deadline {
+            scheduler
+                .pump(&mut listener, &mut sink)
+                .expect("timestamped pump succeeds");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert_eq!(sink.frames_written, 1);
+        assert!(started.elapsed() >= Duration::from_millis(50));
+    }
+
+    #[test]
+    fn changing_listener_delay_shifts_active_timeline_only() {
+        let mut scheduler = PlaybackScheduler::new(PlaybackConfig {
+            target_buffer: Duration::from_millis(40),
+            conceal_grace: Duration::from_millis(70),
+            listener_delay: Duration::from_millis(10),
+            ..PlaybackConfig::default()
+        });
+        let due = Instant::now() + Duration::from_millis(100);
+        scheduler.next_due = Some(due);
+
+        scheduler.set_listener_delay(Duration::from_millis(50));
+        assert_eq!(
+            scheduler.next_due.expect("timeline remains armed"),
+            due + Duration::from_millis(40)
+        );
+        assert_eq!(scheduler.config.target_buffer, Duration::from_millis(40));
+        assert_eq!(scheduler.config.conceal_grace, Duration::from_millis(70));
+
+        scheduler.set_listener_delay(Duration::ZERO);
+        assert_eq!(
+            scheduler.next_due.expect("timeline remains armed"),
+            due - Duration::from_millis(10)
+        );
     }
 
     #[test]

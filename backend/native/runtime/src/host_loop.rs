@@ -104,6 +104,36 @@ impl From<HostRuntimeError> for HostLoopError {
     }
 }
 
+/// Errors reported while constructing a host runtime on its scheduler thread.
+#[derive(Debug)]
+pub enum HostLoopStartError {
+    /// The runtime factory could not construct the source or runtime.
+    Factory(String),
+    /// The runtime could not finish its socket setup on the scheduler thread.
+    Runtime(HostRuntimeError),
+    /// The scheduler thread exited before reporting its startup result.
+    Thread,
+}
+
+impl fmt::Display for HostLoopStartError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Factory(message) => write!(formatter, "{message}"),
+            Self::Runtime(error) => write!(formatter, "{error}"),
+            Self::Thread => write!(formatter, "the host loop exited during startup"),
+        }
+    }
+}
+
+impl std::error::Error for HostLoopStartError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Runtime(error) => Some(error),
+            Self::Factory(_) | Self::Thread => None,
+        }
+    }
+}
+
 const MAX_RETAINED_ITEMS: usize = 1_024;
 const RETAIN_AFTER_OVERFLOW: usize = 512;
 
@@ -198,6 +228,11 @@ impl HostLoopHandle {
     /// Requests a stop and waits for the loop thread to finish. Sending
     /// [`HostCommand::EndSession`] first produces an orderly shutdown.
     pub fn stop(mut self) {
+        let _ = self.commands.send(HostCommand::EndSession(0));
+        let deadline = Instant::now() + Duration::from_millis(250);
+        while self.is_running() && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(1));
+        }
         self.shared.stop.store(true, Ordering::Relaxed);
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
@@ -247,6 +282,72 @@ where
     })
 }
 
+/// Constructs and starts a host runtime on the scheduler thread.
+///
+/// This variant is important for platform sources such as WASAPI: COM and
+/// other thread-affine resources must be initialized on the same thread that
+/// will use and drop them. The caller blocks until the factory has either
+/// produced a bound runtime or reported an initialization error.
+pub fn spawn_host_loop_with_factory<S, F>(
+    factory: F,
+    approval: ApprovalPolicy,
+    config: HostLoopConfig,
+) -> Result<HostLoopHandle, HostLoopStartError>
+where
+    S: PcmSource + Send + 'static,
+    F: FnOnce() -> Result<HostRuntime<S>, String> + Send + 'static,
+{
+    let shared = Arc::new(HostLoopShared::new());
+    let (command_sender, command_receiver) = mpsc::channel::<HostCommand>();
+    let (startup_sender, startup_receiver) = mpsc::sync_channel(1);
+    let thread_shared = Arc::clone(&shared);
+    let thread = thread::spawn(move || {
+        let runtime = match factory() {
+            Ok(runtime) => runtime,
+            Err(message) => {
+                let _ = startup_sender.send(Err(HostLoopStartError::Factory(message)));
+                return;
+            }
+        };
+
+        let local_addr = match runtime.local_addr() {
+            Ok(local_addr) => local_addr,
+            Err(error) => {
+                let _ = startup_sender.send(Err(HostLoopStartError::Runtime(error)));
+                return;
+            }
+        };
+        if let Err(error) = runtime.set_read_timeout(Some(config.control_wait_floor)) {
+            let _ = startup_sender.send(Err(HostLoopStartError::Runtime(error)));
+            return;
+        }
+
+        if startup_sender.send(Ok(local_addr)).is_err() {
+            return;
+        }
+        run_loop(runtime, approval, config, thread_shared, command_receiver);
+    });
+
+    let local_addr = match startup_receiver.recv() {
+        Ok(Ok(local_addr)) => local_addr,
+        Ok(Err(error)) => {
+            let _ = thread.join();
+            return Err(error);
+        }
+        Err(_) => {
+            let _ = thread.join();
+            return Err(HostLoopStartError::Thread);
+        }
+    };
+
+    Ok(HostLoopHandle {
+        shared,
+        commands: command_sender,
+        thread: Some(thread),
+        local_addr,
+    })
+}
+
 fn run_loop<S: PcmSource>(
     mut runtime: HostRuntime<S>,
     approval: ApprovalPolicy,
@@ -277,13 +378,26 @@ fn run_loop<S: PcmSource>(
             match runtime.receive_control_once_realtime(Instant::now()) {
                 Ok(events) => {
                     for event in events {
-                        if let SessionEvent::ListenerJoined { listener_id, .. } = event
-                            && approval(listener_id)
-                            && let Err(error) = runtime.approve_listener(listener_id)
-                        {
-                            shared.push_error(error);
-                        }
+                        let auto_approve = match &event {
+                            SessionEvent::ListenerJoined { listener_id, .. }
+                                if approval(*listener_id) =>
+                            {
+                                Some(*listener_id)
+                            }
+                            _ => None,
+                        };
                         shared.push_event(event);
+
+                        if let Some(listener_id) = auto_approve {
+                            match runtime.approve_listener(listener_id) {
+                                Ok(approval_events) => {
+                                    for approval_event in approval_events {
+                                        shared.push_event(approval_event);
+                                    }
+                                }
+                                Err(error) => shared.push_error(error),
+                            }
+                        }
                     }
                 }
                 Err(HostRuntimeError::Io(error))
@@ -326,19 +440,39 @@ fn execute_commands<S: PcmSource>(
     loop {
         match commands.try_recv() {
             Ok(HostCommand::ApproveListener(listener_id)) => {
-                if let Err(error) = runtime.approve_listener(listener_id) {
-                    shared.push_error(error);
+                match runtime.approve_listener(listener_id) {
+                    Ok(events) => {
+                        for event in events {
+                            shared.push_event(event);
+                        }
+                    }
+                    Err(error) => shared.push_error(error),
                 }
             }
             Ok(HostCommand::RemoveListener(listener_id)) => {
-                if let Err(error) = runtime.remove_listener(listener_id) {
-                    shared.push_error(error);
+                match runtime.remove_listener(listener_id) {
+                    Ok(events) => {
+                        for event in events {
+                            shared.push_event(event);
+                        }
+                    }
+                    Err(error) => shared.push_error(error),
                 }
             }
             Ok(HostCommand::EndSession(reason)) => {
-                if let Err(error) = runtime.end_session(reason) {
-                    shared.push_error(error);
+                match runtime.end_session(reason) {
+                    Ok(events) => {
+                        for event in events {
+                            shared.push_event(event);
+                        }
+                        // EndSession has already dispatched the terminal
+                        // notifications; stop the loop so its owner can
+                        // release the handle and socket deterministically.
+                        shared.stop.store(true, Ordering::Relaxed);
+                    }
+                    Err(error) => shared.push_error(error),
                 }
+                return;
             }
             Err(TryRecvError::Empty) => return,
             Err(TryRecvError::Disconnected) => {
@@ -386,6 +520,37 @@ mod tests {
             ..HostLoopConfig::default()
         };
         spawn_host_loop(runtime, auto_approve_all(), config).expect("host loop should spawn")
+    }
+
+    #[test]
+    fn factory_constructs_the_runtime_on_the_host_loop_thread() {
+        let caller_thread = thread::current().id();
+        let (constructed_sender, constructed_receiver) = mpsc::channel();
+        let host = spawn_host_loop_with_factory(
+            move || {
+                constructed_sender
+                    .send(thread::current().id())
+                    .expect("startup receiver should remain available");
+                HostRuntime::new(
+                    "127.0.0.1:0",
+                    session_id(),
+                    token(),
+                    1,
+                    SyntheticPcmSource::new(220.0),
+                    1_000_000,
+                )
+                .map_err(|error| error.to_string())
+            },
+            auto_approve_all(),
+            HostLoopConfig::default(),
+        )
+        .expect("factory host loop should start");
+
+        let constructed_thread = constructed_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("factory should run before startup returns");
+        assert_ne!(constructed_thread, caller_thread);
+        host.stop();
     }
 
     fn wait_until(deadline_ms: u64, mut condition: impl FnMut() -> bool) -> bool {
@@ -478,6 +643,12 @@ mod tests {
             let _ = scheduler.pump(&mut listener, &mut sink);
             listener.session().state() == ListenerState::Active
         }));
+        assert!(
+            host.take_events()
+                .iter()
+                .any(|event| matches!(event, SessionEvent::ListenerApproved { .. })),
+            "host should retain the approval event"
+        );
 
         let listener_id = listener
             .session()
@@ -489,6 +660,12 @@ mod tests {
             let _ = scheduler.pump(&mut listener, &mut sink);
             listener.session().state() == ListenerState::Removed
         }));
+        assert!(
+            host.take_events()
+                .iter()
+                .any(|event| matches!(event, SessionEvent::ListenerRemoved { .. })),
+            "host should retain the removal event"
+        );
         host.stop();
     }
 

@@ -44,14 +44,16 @@ frames / 5 s at exact cadence on loopback with zero concealment.
 - Fieldwork (owner): 2 → 5 listeners, kill-one-listener isolation, calibrate
   to the PRD's 20–50 ms, 30-minute soak with ≤1 interruption.
 
-## Milestone 5 — Flutter bridge + Windows host UI — FFI COMPLETE; PAGE WIRING PENDING (needs Flutter SDK)
+## Milestone 5 — Flutter bridge + Windows host UI — COMPLETE
 
 - `audiosync-ffi`: narrow C ABI over `HostRuntime`/`HostLoop` and
   `ListenerRuntime`/`PlaybackScheduler` (JSON event/command surface).
 - Flutter: `flutter create --platforms=android,windows`; Dart `dart:ffi`
   controller with automatic mock fallback when the library is absent; real
   host session UI (token, listener list, approve/remove) and real listener
-  join/playback. Mocks stay available for widget tests.
+  join/playback. Mocks stay available for widget tests. Pages wired
+  October 25, 2026 (see CHANGELOG); engine start verified through the DLL
+  on Windows.
 
 ## Milestone 6 — Android listener + MVP demo — OWNER + GROUNDWORK
 
@@ -69,24 +71,14 @@ frames / 5 s at exact cadence on loopback with zero concealment.
 
 ## Working on the Windows machine — next steps
 
-1. `git pull`, then `cargo build --workspace --locked`. This reproduces the
-   open CI failure (Windows compile check) in seconds; the error message
-   from the Actions log is at
-   <https://github.com/shubham-hire/Syncit/actions/runs/40166961425>.
-   The earlier `Send` defect is already fixed and probe-verified, so what
-   remains is a different Windows-only compile error in the new crates
-   (`apps`, `ffi`, `runtime` paths or the `cpal` Windows build are the
-   candidates).
-2. Isolation trick for Windows-only errors: a throwaway crate depending
-   only on the suspect (e.g. `wasapi`) checked with
-   `cargo check --target x86_64-pc-windows-msvc` skips the Opus/CMake build
-   and compiles in seconds. On the Windows PC itself, plain
-   `cargo check -p <crate>` is already fast.
-3. Once it builds, run the full gate on the PC (CI is compile-only for
-   Windows by owner choice): `cargo fmt --all -- --check`,
-   `cargo clippy --workspace --all-targets --locked -- -D warnings`,
-   `cargo test --workspace --locked`, `cargo run -p audiosync-sim --locked`.
-4. Push; CI re-runs (Linux full gate + landing + Windows compile).
+1. ~~`git pull`, then `cargo build --workspace --locked`~~ DONE (October 25,
+   2026): the failure was E0308 in the two `#[cfg(windows)]` source-selection
+   sites; fixed by boxing the host PCM source (`Box<dyn PcmSource + Send>`).
+2. ~~Isolation trick for Windows-only errors~~ not needed.
+3. ~~Run the full gate on the PC~~ DONE — fmt, clippy `-D warnings`, all
+   68 tests, build, and simulator pass on Windows for the first time.
+4. Push when the owner says so; CI re-runs (Linux full gate + landing +
+   Windows compile).
 5. Then Milestone 2: follow `HOTSPOT_VALIDATION.md` (hotspot, firewall
    rule, `make host` / listener command with real WASAPI capture, wired
    then Bluetooth output, results into the table).

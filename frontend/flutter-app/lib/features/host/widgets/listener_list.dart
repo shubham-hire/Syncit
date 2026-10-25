@@ -4,15 +4,21 @@ class ListenerList extends StatelessWidget {
   const ListenerList({
     required this.listeners,
     required this.approvedListeners,
-    required this.onSimulateListener,
     required this.onApprove,
     required this.onRemove,
+    this.transportLabel = 'mock transport',
+    this.onSimulateListener,
     super.key,
   });
 
   final List<String> listeners;
   final Set<String> approvedListeners;
-  final VoidCallback onSimulateListener;
+
+  /// Subtitle suffix for approved listeners ('Approved · <label>').
+  final String transportLabel;
+
+  /// Null hides the simulate button (real engine sessions get real joins).
+  final VoidCallback? onSimulateListener;
   final ValueChanged<String> onApprove;
   final ValueChanged<String> onRemove;
 
@@ -47,7 +53,7 @@ class ListenerList extends StatelessWidget {
                   title: Text(listener),
                   subtitle: Text(
                     approvedListeners.contains(listener)
-                        ? 'Approved · mock transport'
+                        ? 'Approved · $transportLabel'
                         : 'Awaiting host approval',
                   ),
                   trailing: Row(
@@ -69,11 +75,12 @@ class ListenerList extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: listeners.length < 5 ? onSimulateListener : null,
-              icon: const Icon(Icons.person_add_alt_1),
-              label: const Text('Simulate listener'),
-            ),
+            if (onSimulateListener != null)
+              OutlinedButton.icon(
+                onPressed: listeners.length < 5 ? onSimulateListener : null,
+                icon: const Icon(Icons.person_add_alt_1),
+                label: const Text('Simulate listener'),
+              ),
           ],
         ),
       ),

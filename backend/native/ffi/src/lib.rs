@@ -5,16 +5,17 @@
 //! boundary as small JSON documents so the Dart side needs no code
 //! generation beyond `dart:ffi`.
 //!
-//! Threading model: each handle owns its runtime on a dedicated thread (the
-//! same host loop used by the CLI). Calls are cheap channel sends; events
-//! accumulate in a bounded log that Dart polls with
-//! [`audiosync_ffi_take_events`]. All returned strings are heap-allocated
-//! UTF-8 and must be freed with [`audiosync_ffi_free_string`].
+//! Threading model: each host handle owns its runtime on a dedicated thread
+//! (the same host loop used by the CLI). Calls are cheap channel sends; events
+//! accumulate in bounded logs that Dart drains through the command/pump calls.
+//! Host and listener stop calls release their global handle slots. All returned
+//! strings are heap-allocated UTF-8 and must be freed with
+//! [`audiosync_ffi_free_string`].
 
 use audiosync_apps::{hex16, parse_hex16, random_bytes16};
 use audiosync_runtime::{
     HostCommand, HostLoopConfig, HostLoopHandle, ListenerRuntime, NullSink, PlaybackConfig,
-    PlaybackScheduler, spawn_host_loop,
+    PlaybackScheduler, spawn_host_loop_with_factory,
 };
 use audiosync_session::ListenerState;
 use audiosync_transport::SessionToken;
@@ -107,36 +108,41 @@ fn host_start(request: &str) -> Result<String, String> {
         .next()
         .ok_or_else(|| format!("bind address {bind:?} resolved to nothing"))?;
 
-    #[cfg(windows)]
-    let (source, _source_kind) = if synthetic {
-        (audiosync_audio::SyntheticPcmSource::new(220.0), "synthetic")
-    } else {
-        let capture = audiosync_audio::WasapiCapture::default_loopback()
-            .map_err(|error| format!("WASAPI unavailable: {error}"))?;
-        (capture, "wasapi")
-    };
-    #[cfg(not(windows))]
-    let (source, _source_kind) = {
-        let _ = synthetic;
-        (audiosync_audio::SyntheticPcmSource::new(220.0), "synthetic")
+    // WASAPI initializes COM on the thread that constructs the capture. The
+    // Flutter UI thread may already use a different COM apartment, so defer
+    // source and runtime construction to the dedicated host-loop thread.
+    let factory = move || {
+        #[cfg(windows)]
+        let source: Box<dyn audiosync_audio::PcmSource + Send> = if synthetic {
+            Box::new(audiosync_audio::SyntheticPcmSource::new(220.0))
+        } else {
+            let capture = audiosync_audio::WasapiCapture::default_loopback()
+                .map_err(|error| format!("WASAPI unavailable: {error}"))?;
+            Box::new(capture)
+        };
+        #[cfg(not(windows))]
+        let source: Box<dyn audiosync_audio::PcmSource + Send> = {
+            let _ = synthetic;
+            Box::new(audiosync_audio::SyntheticPcmSource::new(220.0))
+        };
+
+        audiosync_runtime::HostRuntime::new(
+            bind_addr,
+            session_bytes,
+            SessionToken::new(token_bytes),
+            max_listeners,
+            source,
+            audiosync_runtime::monotonic_micros() as u64,
+        )
+        .map_err(|error| format!("host runtime: {error}"))
     };
 
-    let runtime = audiosync_runtime::HostRuntime::new(
-        bind_addr,
-        session_bytes,
-        SessionToken::new(token_bytes),
-        max_listeners,
-        source,
-        audiosync_runtime::monotonic_micros() as u64,
-    )
-    .map_err(|error| format!("host runtime: {error}"))?;
-
-    let handle = spawn_host_loop(
-        runtime,
+    let handle = spawn_host_loop_with_factory(
+        factory,
         Box::new(move |_: audiosync_transport::ListenerId| auto_approve),
         HostLoopConfig::default(),
     )
-    .map_err(|error| format!("host loop: {error}"))?;
+    .map_err(|error| error.to_string())?;
 
     let bind_address = handle.local_addr().to_string();
     let mut hosts = bridge().hosts.lock().map_err(|_| "bridge lock poisoned")?;
@@ -190,20 +196,29 @@ fn host_command(request: &str) -> Result<String, String> {
                 let listener_hex = json::get_str(request, "listener")
                     .ok_or("approve requires a listener hex id")?;
                 let bytes = parse_hex16(listener_hex)?;
-                let _ = entry.handle.send_command(HostCommand::ApproveListener(
-                    audiosync_transport::ListenerId::new(bytes),
-                ));
+                entry
+                    .handle
+                    .send_command(HostCommand::ApproveListener(
+                        audiosync_transport::ListenerId::new(bytes),
+                    ))
+                    .map_err(|error| error.to_string())?;
             }
             "remove" => {
                 let listener_hex = json::get_str(request, "listener")
                     .ok_or("remove requires a listener hex id")?;
                 let bytes = parse_hex16(listener_hex)?;
-                let _ = entry.handle.send_command(HostCommand::RemoveListener(
-                    audiosync_transport::ListenerId::new(bytes),
-                ));
+                entry
+                    .handle
+                    .send_command(HostCommand::RemoveListener(
+                        audiosync_transport::ListenerId::new(bytes),
+                    ))
+                    .map_err(|error| error.to_string())?;
             }
             "end" => {
-                let _ = entry.handle.send_command(HostCommand::EndSession(0));
+                entry
+                    .handle
+                    .send_command(HostCommand::EndSession(0))
+                    .map_err(|error| error.to_string())?;
             }
             other => return Err(format!("unknown command {other:?}")),
         }
@@ -232,6 +247,38 @@ fn host_command(request: &str) -> Result<String, String> {
     writer.array("events", &events);
     writer.array("errors", &errors);
     Ok(writer.finish())
+}
+
+/// # Safety
+/// `handle_json` must be NUL-terminated UTF-8 with shape `{"handle":N}`.
+/// The host slot is removed even when the loop has already stopped.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn audiosync_ffi_host_stop(handle_json: *const c_char) -> *mut c_char {
+    let request = match unsafe { decode_json(handle_json) } {
+        Some(text) => text,
+        None => return alloc_string(error_response("invalid stop json")),
+    };
+    match host_stop(&request) {
+        Ok(response) => alloc_string(response),
+        Err(message) => alloc_string(error_response(&message)),
+    }
+}
+
+fn host_stop(request: &str) -> Result<String, String> {
+    let handle: usize = json::get_u64(request, "handle")
+        .ok_or("missing handle")?
+        .try_into()
+        .map_err(|_| "handle out of range")?;
+    let entry = {
+        let mut hosts = bridge().hosts.lock().map_err(|_| "bridge lock poisoned")?;
+        hosts
+            .get_mut(handle)
+            .and_then(Option::take)
+            .ok_or("unknown host handle")?
+    };
+
+    entry.handle.stop();
+    Ok("{\"ok\":true}".to_owned())
 }
 
 /// # Safety
@@ -347,12 +394,7 @@ fn listener_pump(request: &str) -> Result<String, String> {
         .map_err(|_| "scheduler lock poisoned")?;
 
     if let Some(delay_ms) = json::get_u64(request, "delay_ms") {
-        // Rebuild with the new calibration delay while keeping cadence.
-        let config = PlaybackConfig {
-            listener_delay: Duration::from_millis(delay_ms),
-            ..PlaybackConfig::default()
-        };
-        scheduler.set_config(config);
+        scheduler.set_listener_delay(Duration::from_millis(delay_ms));
     }
 
     let mut sink = NullSink::default();
@@ -423,18 +465,33 @@ pub unsafe extern "C" fn audiosync_ffi_listener_leave(handle_json: *const c_char
         Some(value) => value as usize,
         None => return alloc_string(error_response("missing handle")),
     };
-    let Ok(mut listeners) = bridge().listeners.lock() else {
-        return alloc_string(error_response("bridge lock poisoned"));
+    match listener_leave(handle) {
+        Ok(response) => alloc_string(response),
+        Err(message) => alloc_string(error_response(&message)),
+    }
+}
+
+fn listener_leave(handle: usize) -> Result<String, String> {
+    let entry = {
+        let mut listeners = bridge()
+            .listeners
+            .lock()
+            .map_err(|_| "bridge lock poisoned")?;
+        listeners
+            .get_mut(handle)
+            .and_then(Option::take)
+            .ok_or("unknown listener handle")?
     };
-    if let Some(entry) = listeners.get_mut(handle).and_then(|slot| slot.as_ref())
-        && let Ok(runtime) = entry.runtime.lock()
-    {
-        let _ = runtime.send_join();
-    }
-    if let Some(slot) = listeners.get_mut(handle) {
-        *slot = None;
-    }
-    alloc_string("{\"ok\":true}".to_owned())
+
+    let leave_result = entry
+        .runtime
+        .lock()
+        .map_err(|_| "runtime lock poisoned")?
+        .send_leave()
+        .map(|_| ());
+    drop(entry);
+    leave_result.map_err(|error| format!("listener leave: {error}"))?;
+    Ok("{\"ok\":true}".to_owned())
 }
 
 fn push_event(events: &Mutex<Vec<String>>, text: &str) {
@@ -467,7 +524,7 @@ fn error_response(message: &str) -> String {
 mod tests {
     use super::*;
     use std::ffi::CString;
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn json_writer_produces_flat_objects() {
@@ -562,13 +619,65 @@ mod tests {
             host_status.contains("ListenerJoined"),
             "host events: {host_status}"
         );
+        assert!(
+            host_status.contains("ListenerApproved"),
+            "host approval events: {host_status}"
+        );
 
-        let end_json = format!(r#"{{"handle":{host_handle},"command":"end"}}"#);
-        let end = call(audiosync_ffi_host_command, &end_json);
-        assert!(end.contains("\"ok\":true"));
         let leave_json = format!(r#"{{"handle":{listener_handle}}}"#);
         let leave = call(audiosync_ffi_listener_leave, &leave_json);
         assert!(leave.contains("\"ok\":true"));
+
+        let removal_deadline = Instant::now() + Duration::from_secs(2);
+        let mut removal_seen = false;
+        while Instant::now() < removal_deadline {
+            let status = call(audiosync_ffi_host_command, &host_command_json);
+            if status.contains("ListenerRemoved") {
+                removal_seen = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(removal_seen, "host did not observe listener leave");
+
+        let listener_again = call(audiosync_ffi_listener_start, &join);
+        assert!(
+            listener_again.contains("\"ok\":true"),
+            "listener slot was not reusable: {listener_again}"
+        );
+        let listener_again_handle =
+            json::get_u64(&listener_again, "handle").expect("reused listener handle");
+        let leave_again = call(
+            audiosync_ffi_listener_leave,
+            &format!(r#"{{"handle":{listener_again_handle}}}"#),
+        );
+        assert!(
+            leave_again.contains("\"ok\":true"),
+            "reused listener leave: {leave_again}"
+        );
+
+        let stop = call(
+            audiosync_ffi_host_stop,
+            &format!(r#"{{"handle":{host_handle}}}"#),
+        );
+        assert!(stop.contains("\"ok\":true"), "host stop: {stop}");
+    }
+
+    #[test]
+    fn ffi_host_slots_are_reusable_after_stop() {
+        for _ in 0..10 {
+            let host_json = call(
+                audiosync_ffi_host_start,
+                r#"{"bind":"127.0.0.1:0","synthetic":true,"max_listeners":1}"#,
+            );
+            assert!(host_json.contains("\"ok\":true"), "host start: {host_json}");
+            let handle = json::get_u64(&host_json, "handle").expect("host handle");
+            let stop = call(
+                audiosync_ffi_host_stop,
+                &format!(r#"{{"handle":{handle}}}"#),
+            );
+            assert!(stop.contains("\"ok\":true"), "host stop: {stop}");
+        }
     }
 
     #[test]

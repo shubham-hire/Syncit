@@ -29,14 +29,14 @@ class ListenerStatus {
   });
 
   factory ListenerStatus.fromMap(Map<String, dynamic> map) => ListenerStatus(
-        state: map['state'] as String? ?? 'Disconnected',
-        active: map['active'] == true,
-        rendered: (map['rendered'] as num?)?.toInt() ?? 0,
-        concealed: (map['concealed'] as num?)?.toInt() ?? 0,
-        buffered: (map['buffered'] as num?)?.toInt() ?? 0,
-        roundTripMicros: (map['rtt_us'] as num?)?.toInt() ?? -1,
-        events: (map['events'] as List?)?.cast<String>() ?? const <String>[],
-      );
+    state: map['state'] as String? ?? 'Disconnected',
+    active: map['active'] == true,
+    rendered: (map['rendered'] as num?)?.toInt() ?? 0,
+    concealed: (map['concealed'] as num?)?.toInt() ?? 0,
+    buffered: (map['buffered'] as num?)?.toInt() ?? 0,
+    roundTripMicros: (map['rtt_us'] as num?)?.toInt() ?? -1,
+    events: (map['events'] as List?)?.cast<String>() ?? const <String>[],
+  );
 
   final String state;
   final bool active;
@@ -57,11 +57,11 @@ class HostSessionInfo {
   });
 
   factory HostSessionInfo.fromMap(Map<String, dynamic> map) => HostSessionInfo(
-        handle: (map['handle'] as num?)?.toInt() ?? -1,
-        bindAddress: map['bind'] as String? ?? '',
-        sessionHex: map['session'] as String? ?? '',
-        tokenHex: map['token'] as String? ?? '',
-      );
+    handle: (map['handle'] as num?)?.toInt() ?? -1,
+    bindAddress: map['bind'] as String? ?? '',
+    sessionHex: map['session'] as String? ?? '',
+    tokenHex: map['token'] as String? ?? '',
+  );
 
   final int handle;
   final String bindAddress;
@@ -91,7 +91,10 @@ class EngineController {
     try {
       return (jsonDecode(text) as Map).cast<String, dynamic>();
     } catch (_) {
-      return <String, dynamic>{'ok': false, 'error': 'unparseable engine response'};
+      return <String, dynamic>{
+        'ok': false,
+        'error': 'unparseable engine response',
+      };
     }
   }
 
@@ -192,9 +195,7 @@ class EngineController {
     if (bindings == null) return;
     _poll = Timer.periodic(interval, (_) {
       if (_hostHandle < 0) return;
-      final response = _decode(
-        bindings.hostCommand('{"handle":$_hostHandle}'),
-      );
+      final response = _decode(bindings.hostCommand('{"handle":$_hostHandle}'));
       onEvents(
         (response['events'] as List?)?.cast<String>() ?? const <String>[],
       );
@@ -223,11 +224,55 @@ class EngineController {
     stopPolling();
     if (_bindings != null && _hostHandle >= 0) {
       _bindings.hostCommand('{"handle":$_hostHandle,"command":"end"}');
+      _bindings.hostStop('{"handle":$_hostHandle}');
     }
     if (_bindings != null && _listenerHandle >= 0) {
       _bindings.listenerLeave('{"handle":$_listenerHandle}');
     }
     _hostHandle = -1;
     _listenerHandle = -1;
+  }
+}
+
+/// One event drained from host polling, parsed into a name and an optional
+/// listener hex id.
+class HostEvent {
+  HostEvent({required this.name, this.listenerHex});
+
+  final String name;
+
+  /// 32-char lowercase hex listener id when the event carries one.
+  final String? listenerHex;
+
+  /// Parses one raw event string. The engine serializes each event as
+  /// `{"event":"<Rust Debug of the SessionEvent>"}` and Rust renders ids as
+  /// `ListenerId([byte, byte, ...])`, so the hex is rebuilt from the bytes.
+  static HostEvent? parse(String raw) {
+    var text = raw;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map && decoded['event'] is String) {
+        text = decoded['event'] as String;
+      }
+    } catch (_) {
+      // Not JSON; treat the raw text as the event payload.
+    }
+    final name = RegExp(r'^([A-Za-z]+)').firstMatch(text)?.group(1);
+    if (name == null) return null;
+    return HostEvent(name: name, listenerHex: _listenerHex(text));
+  }
+
+  static String? _listenerHex(String text) {
+    final match = RegExp(
+      r'ListenerId\(\[([0-9,\s]+)\]\)',
+    ).firstMatch(text)?.group(1);
+    if (match == null) return null;
+    final bytes = match.split(',').map((part) => int.tryParse(part.trim()));
+    if (bytes.any((byte) => byte == null || byte < 0 || byte > 255)) {
+      return null;
+    }
+    final hex =
+        bytes.map((byte) => byte!.toRadixString(16).padLeft(2, '0')).join();
+    return hex.length == 32 ? hex : null;
   }
 }

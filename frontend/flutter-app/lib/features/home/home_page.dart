@@ -78,7 +78,7 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'The current build contains the host/listener flow and a mock session. Real Windows capture, Opus transport and Android playback are the next integration milestones.',
+                    'The host/listener flow now drives the real Rust engine when its library is present, and falls back to a mock session otherwise. Real hotspot capture and Android playback are the next milestones.',
                   ),
                 ],
               ),
