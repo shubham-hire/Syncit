@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/liquid_glass.dart';
 import '../../core/widgets/status_card.dart';
 import '../../engine/engine_controller.dart';
 import '../session/session_constants.dart';
@@ -157,14 +158,9 @@ class _ListenerJoinPageState extends State<ListenerJoinPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Listen to a session')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
+    return GlassScaffold(
+      title: 'Listen to a session',
+      children: [
               if (!_joined)
                 JoinForm(
                   codeController: _codeController,
@@ -240,10 +236,7 @@ class _ListenerJoinPageState extends State<ListenerJoinPage> {
                   onMuteChanged: (value) => setState(() => _muted = value),
                 ),
               ],
-            ],
-          ),
-        ),
-      ),
+      ],
     );
   }
 }

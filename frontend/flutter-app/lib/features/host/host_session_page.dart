@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/liquid_glass.dart';
 import '../../core/widgets/status_card.dart';
 import '../../engine/engine_controller.dart';
 import 'widgets/hotspot_instructions.dart';
@@ -258,14 +259,9 @@ class _HostSessionPageState extends State<HostSessionPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Host session')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
+    return GlassScaffold(
+      title: 'Host session',
+      children: [
               StatusCard(
                 icon: _sessionStarted ? Icons.play_circle : Icons.pause_circle,
                 title:
@@ -357,10 +353,7 @@ class _HostSessionPageState extends State<HostSessionPage> {
                   onRemove: _removeListener,
                 ),
               ],
-            ],
-          ),
-        ),
-      ),
+      ],
     );
   }
 }
