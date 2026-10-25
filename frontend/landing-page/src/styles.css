@@ -280,12 +280,30 @@
     display: none;
   }
   .nav-links {
+    position: relative;
     display: flex;
     align-items: center;
     gap: clamp(20px, 3vw, 40px);
     margin-left: auto;
   }
+  .nav-indicator {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    height: 28px;
+    border-radius: 980px;
+    background: color-mix(in oklch, var(--ink) 6%, transparent);
+    opacity: 0;
+    translate: 0 -50%;
+    transition:
+      transform 0.45s var(--ease-out),
+      width 0.45s var(--ease-out),
+      opacity 0.3s ease;
+    pointer-events: none;
+  }
   .nav-link {
+    position: relative;
+    z-index: 1;
     display: inline-flex;
     align-items: center;
     min-height: 34px;
@@ -566,12 +584,9 @@
     padding: clamp(28px, 3vw, 40px) clamp(24px, 2.6vw, 36px);
     display: flex;
     flex-direction: column;
-    transition:
-      transform 0.4s var(--ease-out),
-      box-shadow 0.4s ease;
+    transition: box-shadow 0.4s ease;
   }
   .step-card:hover {
-    transform: translateY(-4px);
     box-shadow: var(--shadow-card);
   }
   .step-num {
@@ -632,12 +647,9 @@
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-card);
-    transition:
-      transform 0.4s var(--ease-out),
-      box-shadow 0.4s ease;
+    transition: box-shadow 0.4s ease;
   }
   .flow-card:hover {
-    transform: translateY(-4px);
     box-shadow: var(--shadow-card-hover);
   }
   .flow-stage {
@@ -915,12 +927,9 @@
     padding: clamp(24px, 2.4vw, 34px);
     display: flex;
     flex-direction: column;
-    transition:
-      transform 0.4s var(--ease-out),
-      background 0.4s ease;
+    transition: background 0.4s ease;
   }
   .bento-card:hover {
-    transform: translateY(-3px);
     background: color-mix(in oklch, var(--night-card) 82%, var(--paper));
   }
   .bento-card.is-wide {
@@ -1063,6 +1072,170 @@
   }
   .mark-ink {
     stroke: var(--ink);
+  }
+
+  /* Sync demo panel (dark section centerpiece) */
+  .demo-panel {
+    max-width: 760px;
+    margin: 0 auto clamp(48px, 7vh, 80px);
+    background: var(--night-card);
+    border: 1px solid color-mix(in oklch, var(--paper) 8%, transparent);
+    border-radius: 28px;
+    padding: clamp(22px, 2.8vw, 34px) clamp(20px, 3vw, 40px) clamp(20px, 2.6vw, 30px);
+  }
+  .demo-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px 18px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .demo-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--paper);
+  }
+  .demo-status {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: color-mix(in oklch, var(--green) 85%, var(--paper));
+  }
+  .demo-status[data-state="warn"] {
+    color: var(--vermilion-bright);
+  }
+  .demo-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0 2px;
+  }
+  .demo-row {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    align-items: center;
+    gap: 14px;
+  }
+  .demo-lbl {
+    font-size: 12px;
+    font-weight: 500;
+    color: color-mix(in oklch, var(--paper) 52%, transparent);
+  }
+  .demo-strip {
+    --sync-offset: 0px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 52px;
+    width: calc(100% + 72px);
+    margin-left: -36px;
+  }
+  .demo-strip i {
+    flex: 1 1 0;
+    min-width: 2px;
+    height: 100%;
+    border-radius: 2px;
+    background: color-mix(in oklch, var(--paper) 82%, transparent);
+  }
+  .demo-strip.is-listener {
+    transform: translateX(var(--sync-offset));
+    will-change: transform;
+  }
+  .demo-strip.is-listener i {
+    background: var(--grad-signal);
+  }
+  .demo-note {
+    margin: 16px 0 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: color-mix(in oklch, var(--paper) 58%, transparent);
+  }
+
+  /* Roadmap */
+  .roadmap {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+  .roadmap-col {
+    background: var(--fog);
+    border-radius: 28px;
+    padding: clamp(26px, 3vw, 40px);
+  }
+  .roadmap-col h3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 19px;
+    letter-spacing: -0.02em;
+    margin-bottom: 18px;
+  }
+  .roadmap-col .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--vermilion);
+    flex: 0 0 auto;
+  }
+  .roadmap-col .dot.ok {
+    background: var(--green);
+  }
+  .roadmap-col ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .roadmap-col li {
+    position: relative;
+    padding-left: 20px;
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--ink-muted);
+  }
+  .roadmap-col li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 0.5em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: color-mix(in oklch, var(--ink) 28%, transparent);
+  }
+
+  /* FAQ */
+  .faq-list {
+    max-width: 760px;
+    border-top: 1px solid var(--line);
+  }
+  .faq-list [data-slot="accordion-item"],
+  .faq-list .accordion-item {
+    border-color: var(--line-soft);
+  }
+  .faq-list .faq-q {
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    padding: 20px 0;
+  }
+  .faq-list .faq-q:hover {
+    color: var(--vermilion);
+    text-decoration: none;
+  }
+  .faq-list .faq-a {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink-muted);
+    padding-bottom: 22px;
+    max-width: 62ch;
   }
 }
 
@@ -1374,5 +1547,96 @@
   }
   .bento-card {
     border-color: color-mix(in oklch, var(--paper) 40%, transparent);
+  }
+}
+
+/* ---------------------------------------------
+     Dark mode — system-driven. The whole page is
+     token-driven, so the swap is a palette turn:
+     near-black paper, #1c1c1e-style cards, lifted
+     text grays and a brightened vermilion.
+     --------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: oklch(0.93 0.005 260);
+    --ink-2: oklch(0.86 0.007 260);
+    --ink-readable: oklch(0.78 0.008 260);
+    --ink-soft: oklch(0.7 0.01 260);
+    --ink-muted: oklch(0.63 0.011 260);
+    --paper: oklch(0.145 0.006 260);
+    --fog: oklch(0.205 0.008 260);
+    --fog-deep: oklch(0.25 0.009 260);
+    --night: oklch(0.11 0.007 260);
+    --night-card: oklch(0.185 0.009 260);
+    --vermilion: oklch(0.66 0.21 28);
+    --vermilion-bright: oklch(0.7 0.2 28);
+    --green: oklch(0.74 0.15 155);
+    --line: color-mix(in oklch, var(--ink) 14%, transparent);
+    --line-soft: color-mix(in oklch, var(--ink) 9%, transparent);
+    --shadow-mock: 0 24px 60px -20px oklch(0 0 0 / 60%);
+    --shadow-card: 0 20px 44px -18px oklch(0 0 0 / 50%);
+    --shadow-card-hover: 0 30px 60px -20px oklch(0 0 0 / 60%);
+    color-scheme: dark;
+  }
+
+  /* Frosted chrome over dark content */
+  .nav {
+    background: color-mix(in oklch, var(--paper) 62%, transparent);
+  }
+  .nav.scrolled {
+    background: color-mix(in oklch, var(--paper) 78%, transparent);
+  }
+  .nav-mobile {
+    background: color-mix(in oklch, var(--paper) 88%, transparent);
+  }
+  .skip-link {
+    background: var(--fog);
+    color: var(--ink);
+  }
+
+  /* Surfaces that hardcoded light assumptions */
+  .status-pill {
+    background: color-mix(in oklch, var(--fog) 70%, transparent);
+  }
+  .mock-bar i {
+    background: var(--fog);
+  }
+  .flow-stage {
+    background: radial-gradient(
+      120% 90% at 50% 0%,
+      color-mix(in oklch, var(--vermilion) 8%, var(--paper)) 0%,
+      var(--fog) 68%
+    );
+  }
+  .hero-visual .broadcast-carrier {
+    opacity: 0.75;
+  }
+  .foot {
+    background: var(--fog);
+  }
+
+  /* The mock panels keep their shadow readable on near-black */
+  .mock {
+    border-color: var(--line);
+  }
+
+  ::selection {
+    background: var(--vermilion);
+    color: oklch(1 0 0);
+  }
+}
+
+@media (prefers-color-scheme: dark) and (prefers-reduced-transparency: reduce) {
+  .nav {
+    background: var(--paper);
+  }
+  .nav.scrolled {
+    background: var(--paper);
+  }
+  .nav-mobile {
+    background: var(--paper);
+  }
+  .status-pill {
+    background: var(--fog);
   }
 }

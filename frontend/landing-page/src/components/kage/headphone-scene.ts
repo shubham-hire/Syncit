@@ -512,9 +512,7 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     return value * value * (3 - 2 * value);
   }
 
-  const clock = new THREE.Clock();
   const footer = document.querySelector<HTMLElement>("footer");
-  let frame = 0;
   let canvasOpacity = -1;
 
   // Finale pose: centred at full size with the exploded split.
@@ -548,10 +546,20 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     return { x, y, scale };
   }
 
-  function animate() {
-    frame = requestAnimationFrame(animate);
-    const delta = Math.min(clock.getDelta(), 0.05);
-    const t = clock.getElapsedTime();
+  // The render loop sleeps whenever the canvas is fully transparent (mid-page
+  // on narrow screens, or retired at the footer) and wakes on the events that
+  // could change the pose: scroll, pointer, resize. While the canvas is
+  // visible the loop keeps itself alive.
+  let running = false;
+  let rafId = 0;
+  let lastTime = 0;
+  let elapsed = 0;
+
+  function tick(now: number) {
+    const delta = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 0.016;
+    lastTime = now;
+    elapsed += delta;
+    const t = elapsed;
     const scrollP = getScrollProgress();
     const chapterSplitTarget = getChapterProgress("eternity");
     const splitDamping = 1 - Math.exp(-delta * 8);
@@ -630,9 +638,19 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     }
     if (targetOpacity > 0.001) {
       renderer.render(scene, camera);
+      rafId = requestAnimationFrame(tick);
+    } else {
+      running = false;
     }
   }
-  animate();
+
+  const wake = () => {
+    if (running) return;
+    running = true;
+    lastTime = 0;
+    rafId = requestAnimationFrame(tick);
+  };
+  wake();
 
   const onResize = () => {
     const w = container.clientWidth || window.innerWidth;
@@ -642,10 +660,15 @@ export function mountHeadphoneScene(container: HTMLElement, THREE: Three): () =>
     renderer.setSize(w, h);
   };
   window.addEventListener("resize", onResize);
+  window.addEventListener("scroll", wake, { passive: true });
+  window.addEventListener("mousemove", wake, { passive: true });
 
   return () => {
-    cancelAnimationFrame(frame);
+    running = false;
+    cancelAnimationFrame(rafId);
     window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mousemove", wake);
+    window.removeEventListener("scroll", wake);
     window.removeEventListener("resize", onResize);
     envRenderTarget.dispose();
     scene.traverse((obj) => {

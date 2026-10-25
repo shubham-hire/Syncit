@@ -1,14 +1,61 @@
+import { useEffect, useRef } from "react";
 import {
   downloadAction,
+  faqs,
   flows,
   footerColumns,
   hallmarks,
   heroAction,
+  roadmap,
   stats,
   statusPill,
   steps,
 } from "./content";
+import { SyncDemo } from "./sync-demo";
 import { BrandMark, ChevronIcon, DownloadIcon } from "./icons";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+
+/** Counts the numeric tokens of a stat up from zero when scrolled into view. */
+function StatValue({ value }: { value: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const tokens = value.match(/(\d+|\D+)/g) ?? [];
+    if (!tokens.some((t) => /^\d+$/.test(t))) return; // word-only values stay static
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        io.disconnect();
+        const duration = 1200;
+        const start = performance.now();
+        const tick = (now: number) => {
+          const p = Math.min((now - start) / duration, 1);
+          const ease = 1 - Math.pow(1 - p, 4);
+          el.textContent = tokens
+            .map((t) => (/^\d+$/.test(t) ? String(Math.round(Number(t) * ease)) : t))
+            .join("");
+          if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      },
+      { threshold: 0.6 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [value]);
+
+  return <span ref={ref}>{value}</span>;
+}
 
 function SectionIntro({
   eyebrow,
@@ -92,6 +139,7 @@ export function GateSection() {
             className="step-card"
             key={s.num}
             data-reveal="up"
+            data-tilt
             data-reveal-delay={String(i * 110)}
           >
             <span className="step-num">{s.num}</span>
@@ -103,7 +151,9 @@ export function GateSection() {
       <div className="stats" data-reveal="up">
         {stats.map((s) => (
           <div className="stat" key={s.label}>
-            <b>{s.value}</b>
+            <b>
+              <StatValue value={s.value} />
+            </b>
             <span>{s.label}</span>
           </div>
         ))}
@@ -210,6 +260,7 @@ export function FlowsSection() {
             className="flow-card"
             key={f.tag}
             data-reveal="up"
+            data-tilt
             data-reveal-delay={String(i * 130)}
           >
             <div className="flow-stage">
@@ -240,12 +291,14 @@ export function HallmarksSection() {
         <br />
         staying on the same beat.
       </SectionIntro>
+      <SyncDemo />
       <div className="bento">
         {hallmarks.map((h, i) => (
           <article
             className={`bento-card${h.span === "wide" ? " is-wide" : ""}`}
             key={h.title}
             data-reveal="up"
+            data-tilt
             data-reveal-delay={String(i * 90)}
           >
             <span className="bento-num">{String(i + 1).padStart(2, "0")}</span>
@@ -254,6 +307,58 @@ export function HallmarksSection() {
             <span className="bento-tag">{h.tag}</span>
           </article>
         ))}
+      </div>
+    </section>
+  );
+}
+
+export function RoadmapSection() {
+  return (
+    <section className="sec" id="roadmap">
+      <SectionIntro eyebrow="Roadmap">Working today. Shipping next.</SectionIntro>
+      <div className="roadmap">
+        {roadmap.map((col, i) => (
+          <div
+            className="roadmap-col"
+            key={col.phase}
+            data-reveal="up"
+            data-reveal-delay={String(i * 130)}
+          >
+            <h3>
+              <i className={i === 0 ? "dot ok" : "dot"} />
+              {col.phase}
+            </h3>
+            <ul>
+              {col.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function FaqSection() {
+  return (
+    <section className="sec sec-fog" id="faq">
+      <SectionIntro eyebrow="FAQ">
+        Questions people ask
+        <br />
+        before they plug in.
+      </SectionIntro>
+      <div className="faq-list" data-reveal="up">
+        <Accordion type="single" collapsible>
+          {faqs.map((f, i) => (
+            <AccordionItem key={f.q} value={`faq-${i}`}>
+              <AccordionTrigger className="faq-q">{f.q}</AccordionTrigger>
+              <AccordionContent>
+                <div className="faq-a">{f.a}</div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       </div>
     </section>
   );

@@ -2,6 +2,7 @@ export const navLinks = [
   { id: "gate", label: "How it works" },
   { id: "pathways", label: "Host + Listener" },
   { id: "lessons", label: "Sync features" },
+  { id: "faq", label: "FAQ" },
   { id: "eternity", label: "Prototype" },
 ] as const;
 
@@ -98,6 +99,52 @@ export const stats = [
   { value: "1", label: "Windows host to start" },
 ] as const;
 
+export const roadmap = [
+  {
+    phase: "Works today",
+    items: [
+      "Flutter interaction prototype for both host and listener flows",
+      "Rust packet format with sequence numbers and timestamps",
+      "NTP-style clock offset estimation model",
+      "Bounded jitter buffer with deliberate frame skipping",
+      "Offline simulator validating the timing core end to end",
+    ],
+  },
+  {
+    phase: "In progress",
+    items: [
+      "Windows audio capture via WASAPI loopback",
+      "Opus encoding and UDP transport between host and listeners",
+      "Android foreground-service playback for screen-locked listening",
+      "QR-based session pairing instead of typed codes",
+      "Per-listener auto-calibration on top of manual delay control",
+    ],
+  },
+] as const;
+
+export const faqs = [
+  {
+    q: "Do listeners need internet access?",
+    a: "No. A session lives entirely on the host's Wi-Fi network. Nothing is uploaded, streamed through a server, or stored anywhere — the audio travels directly from the host machine to the listeners on the same network.",
+  },
+  {
+    q: "How close to real-time will it be?",
+    a: "The design target is 20–50ms of difference between listeners after per-device calibration, tight enough that every pair of headphones feels locked to the same beat. The timing core behind that target is already simulated and tested offline.",
+  },
+  {
+    q: "Which devices are supported?",
+    a: "The first path is a Windows host and Android listeners using wired or Bluetooth headphones. The architecture keeps host and listener roles separate, so other platforms can be added later without redesigning the core.",
+  },
+  {
+    q: "What can I try right now?",
+    a: "Prototype builds are on GitHub Releases. The current version demonstrates the full interface — sessions, codes, approvals, and per-listener controls — plus the offline timing simulator. Real audio capture and playback are the next integrations.",
+  },
+  {
+    q: "Why not just use a Bluetooth transmitter?",
+    a: "Bluetooth broadcast supports a handful of listeners at fixed quality and adds its own latency. SyncIt is built for a small group on ordinary devices they already own, with per-listener tuning and no extra hardware beyond the host.",
+  },
+] as const;
+
 export const footerColumns = [
   {
     title: "Product",
@@ -105,6 +152,8 @@ export const footerColumns = [
       { label: "How it works", href: "#gate" },
       { label: "Host + listener flows", href: "#pathways" },
       { label: "Sync features", href: "#lessons" },
+      { label: "Roadmap", href: "#roadmap" },
+      { label: "FAQ", href: "#faq" },
       { label: "Prototype status", href: "#eternity" },
     ],
   },
