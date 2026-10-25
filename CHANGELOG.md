@@ -1,5 +1,35 @@
 # Changelog
 
+## October 26, 2026 — Flutter Apple composition pass + branch consolidation
+
+- **Branch cleanup**: removed the four stale merged branches
+  (`backend-scheduler-apps`, `flutter-liquid-glass-ui`, `landing-page-polish`,
+  `roadmap-automation`). The repository now has a single line of history:
+  `main` ≡ `landing-page-refinements`, both pushed.
+- **Liquid Glass strengthened** (October 25 late): richer backdrop washes
+  (primary/tertiary/primaryContainer radials) so the glass has real color to
+  refract; lighter tints with stronger top-edge sheen, borders, and deeper
+  blur per weight. Verified by screenshot after a first version proved
+  visually white-on-white.
+- **Apple composition pass** (`3dfc66d`), per the `apple-design` skill:
+  - `AppType` typography: display 34/-0.8 tracking, hero titles, small-caps
+    section labels at +1.1, quiet body — size-specific tracking throughout.
+  - iOS large-title pattern on every page; the glass bar drops its title
+    when a large title is showing (back chevron only).
+  - Small-caps section labels replace per-card titles (`CHOOSE A ROLE`,
+    `JOIN INFORMATION`, `LISTENERS`, `PLAYBACK`, `PROTOTYPE STATUS`).
+  - `StatusCard` in Apple Settings style with tinted rounded icon badges;
+    `RoleCard` hero layout with 54px badge and stadium pill action;
+    `GlassChip` status pill; `AppPillButton` stadium buttons.
+  - Engine bindings split for web (`ffi_native`/`ffi_stub` dispatched from
+    `ffi_bindings`), preserving the Windows search-path and `hostStop`
+    logic; web runs in mock mode.
+  - Verified: `flutter analyze` clean, 9/9 tests, `dart format` clean, and
+    screenshots of home + host pages in a real browser.
+- Live preview served from `build/web` during development (mock mode on the
+  web; the Rust engine loads only on Windows).
+
+
 ## October 26, 2026 — Landing page Apple-style redesign (merged to `main`, pushed)
 
 Redesigned `frontend/landing-page` from an editorial all-caps look into a clean
