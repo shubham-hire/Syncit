@@ -67,6 +67,30 @@ frames / 5 s at exact cadence on loopback with zero concealment.
   hero) and a GitHub release with M1 binaries so the download CTA is real.
   Publishing is the owner's action.
 
+## Working on the Windows machine — next steps
+
+1. `git pull`, then `cargo build --workspace --locked`. This reproduces the
+   open CI failure (Windows compile check) in seconds; the error message
+   from the Actions log is at
+   <https://github.com/shubham-hire/Syncit/actions/runs/40166961425>.
+   The earlier `Send` defect is already fixed and probe-verified, so what
+   remains is a different Windows-only compile error in the new crates
+   (`apps`, `ffi`, `runtime` paths or the `cpal` Windows build are the
+   candidates).
+2. Isolation trick for Windows-only errors: a throwaway crate depending
+   only on the suspect (e.g. `wasapi`) checked with
+   `cargo check --target x86_64-pc-windows-msvc` skips the Opus/CMake build
+   and compiles in seconds. On the Windows PC itself, plain
+   `cargo check -p <crate>` is already fast.
+3. Once it builds, run the full gate on the PC (CI is compile-only for
+   Windows by owner choice): `cargo fmt --all -- --check`,
+   `cargo clippy --workspace --all-targets --locked -- -D warnings`,
+   `cargo test --workspace --locked`, `cargo run -p audiosync-sim --locked`.
+4. Push; CI re-runs (Linux full gate + landing + Windows compile).
+5. Then Milestone 2: follow `HOTSPOT_VALIDATION.md` (hotspot, firewall
+   rule, `make host` / listener command with real WASAPI capture, wired
+   then Bluetooth output, results into the table).
+
 ## Rules for unattended work
 
 - Branch off the previous work; never commit on `main`; never push; never
