@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart' show AppType;
+
 /// Apple-style Liquid Glass material system.
 ///
 /// Follows the Apple material rules the [apple-design] skill distills:
@@ -77,10 +79,7 @@ List<double> _saturationMatrix(double s) => <double>[
 ];
 
 /// Per-weight, per-brightness material constants.
-LiquidGlassFrost frostFor(
-  Brightness brightness,
-  LiquidGlassWeight weight,
-) {
+LiquidGlassFrost frostFor(Brightness brightness, LiquidGlassWeight weight) {
   final dark = brightness == Brightness.dark;
   return switch (weight) {
     LiquidGlassWeight.thin => LiquidGlassFrost(
@@ -250,10 +249,21 @@ class _PressableGlassState extends State<PressableGlass> {
 /// behind it. The app bar is a floating glass chrome layer that page content
 /// scrolls under.
 class GlassScaffold extends StatelessWidget {
-  const GlassScaffold({required this.title, required this.children, super.key});
+  const GlassScaffold({
+    required this.title,
+    required this.children,
+    this.largeTitle,
+    this.subtitle,
+    super.key,
+  });
 
   final String title;
   final List<Widget> children;
+
+  /// iOS large-title pattern: shown at the top of the content under the
+  /// compact glass bar; the bar keeps the small title for context.
+  final String? largeTitle;
+  final String? subtitle;
 
   static const double _barHeight = 72;
 
@@ -285,17 +295,33 @@ class GlassScaffold extends StatelessWidget {
                           onPressed: () => Navigator.of(context).maybePop(),
                           icon: const Icon(Icons.arrow_back_rounded),
                         ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          // Vibrancy: slightly heavier text over glass.
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                      if (canPop && largeTitle != null) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            // Vibrancy: slightly heavier text over glass.
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
                         ),
-                      ),
+                      ] else if (largeTitle == null) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            // Vibrancy: slightly heavier text over glass.
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ] else ...[
+                        const Spacer(),
+                      ],
                     ],
                   ),
                 ),
@@ -309,10 +335,7 @@ class GlassScaffold extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              scheme.surfaceContainerLowest,
-              scheme.surfaceContainerLow,
-            ],
+            colors: [scheme.surfaceContainerLowest, scheme.surfaceContainerLow],
           ),
         ),
         child: Stack(
@@ -362,17 +385,111 @@ class GlassScaffold extends StatelessWidget {
               ),
             ),
             ListView(
-              padding: const EdgeInsets.fromLTRB(
-                24,
-                _barHeight + 28,
-                24,
-                32,
-              ),
-              children: children,
+              padding: const EdgeInsets.fromLTRB(24, _barHeight + 28, 24, 32),
+              children: [
+                if (largeTitle != null) ...[
+                  Text(
+                    largeTitle!,
+                    style: AppType.display.copyWith(color: scheme.onSurface),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      subtitle!,
+                      style: AppType.body.copyWith(
+                        color: scheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 28),
+                ],
+                ...children,
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+/// Small glass status chip (iOS-style pill tag).
+class GlassChip extends StatelessWidget {
+  const GlassChip({required this.label, this.icon, super.key});
+
+  final String label;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return LiquidGlass(
+      weight: LiquidGlassWeight.thin,
+      borderRadius: 999,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 13, color: scheme.primary),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            label,
+            style: AppType.sectionLabel.copyWith(color: scheme.onSurface),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Apple-style stadium pill button.
+class AppPillButton extends StatelessWidget {
+  const AppPillButton({
+    required this.label,
+    required this.onPressed,
+    this.filled = true,
+    this.icon,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool filled;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = StadiumBorder(
+      side:
+          filled
+              ? BorderSide.none
+              : BorderSide(
+                color: Theme.of(
+                  context,
+                ).colorScheme.outline.withValues(alpha: 0.4),
+              ),
+    );
+    final style = FilledButton.styleFrom(
+      shape: shape,
+      minimumSize: const Size(0, 44),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      textStyle: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.1,
+      ),
+    );
+    final child = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[Icon(icon, size: 17), const SizedBox(width: 6)],
+        Text(label),
+      ],
+    );
+    return filled
+        ? FilledButton(onPressed: onPressed, style: style, child: child)
+        : FilledButton.tonal(onPressed: onPressed, style: style, child: child);
   }
 }

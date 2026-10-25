@@ -160,82 +160,84 @@ class _ListenerJoinPageState extends State<ListenerJoinPage> {
   Widget build(BuildContext context) {
     return GlassScaffold(
       title: 'Listen to a session',
+      largeTitle: 'Listen',
+      subtitle: 'Join a host and play the shared audio through this device.',
       children: [
-              if (!_joined)
-                JoinForm(
-                  codeController: _codeController,
-                  onJoin: _join,
-                  engineMode: _engineMode,
-                  hostController: _hostController,
-                  sessionController: _sessionController,
-                  tokenController: _tokenController,
-                ),
-              if (_joined) ...[
-                if (_engineMode) ...[
-                  StatusCard(
-                    icon:
-                        (_status?.active ?? false)
-                            ? Icons.surround_sound
-                            : _status?.state == 'PendingApproval'
-                            ? Icons.pending_actions
-                            : Icons.sync,
-                    title:
-                        (_status?.active ?? false)
-                            ? 'Session connected'
-                            : _status?.state == 'PendingApproval'
-                            ? 'Waiting for host approval'
-                            : 'Connecting to session',
-                    message: _engineStatusLine,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Decoded audio is sent to the Windows default output. '
-                    'Volume and mute controls remain local UI controls for now.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  if (_isLoopbackHost &&
-                      _status?.output == 'Windows default output') ...[
-                    const SizedBox(height: 16),
-                    const StatusCard(
-                      icon: Icons.warning_amber,
-                      title: 'Same-PC loopback warning',
-                      message:
-                          'The host captures the Windows default output and '
-                          'this listener also plays to that output. On the same '
-                          'PC, this produces the original audio plus a delayed '
-                          'relayed copy. Use a separate listener device or choose '
-                          'a different output device.',
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  StatusCard(
-                    icon: Icons.analytics_outlined,
-                    title: 'Listener diagnostics',
-                    message: _listenerDiagnostics,
-                  ),
-                ] else ...[
-                  const StatusCard(
-                    icon: Icons.check_circle,
-                    title: 'Mock session connected',
-                    message:
-                        'Playback controls are ready for the real listener engine.',
-                  ),
-                ],
-                const SizedBox(height: 16),
-                PlaybackControls(
-                  delay: _delay,
-                  volume: _volume,
-                  muted: _muted,
-                  onDelayChanged: (value) {
-                    setState(() => _delay = value);
-                    if (_engineMode) {
-                      _engine.pumpListener(delayMs: value.round());
-                    }
-                  },
-                  onVolumeChanged: (value) => setState(() => _volume = value),
-                  onMuteChanged: (value) => setState(() => _muted = value),
-                ),
-              ],
+        if (!_joined)
+          JoinForm(
+            codeController: _codeController,
+            onJoin: _join,
+            engineMode: _engineMode,
+            hostController: _hostController,
+            sessionController: _sessionController,
+            tokenController: _tokenController,
+          ),
+        if (_joined) ...[
+          if (_engineMode) ...[
+            StatusCard(
+              icon:
+                  (_status?.active ?? false)
+                      ? Icons.surround_sound
+                      : _status?.state == 'PendingApproval'
+                      ? Icons.pending_actions
+                      : Icons.sync,
+              title:
+                  (_status?.active ?? false)
+                      ? 'Session connected'
+                      : _status?.state == 'PendingApproval'
+                      ? 'Waiting for host approval'
+                      : 'Connecting to session',
+              message: _engineStatusLine,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Decoded audio is sent to the Windows default output. '
+              'Volume and mute controls remain local UI controls for now.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (_isLoopbackHost &&
+                _status?.output == 'Windows default output') ...[
+              const SizedBox(height: 16),
+              const StatusCard(
+                icon: Icons.warning_amber,
+                title: 'Same-PC loopback warning',
+                message:
+                    'The host captures the Windows default output and '
+                    'this listener also plays to that output. On the same '
+                    'PC, this produces the original audio plus a delayed '
+                    'relayed copy. Use a separate listener device or choose '
+                    'a different output device.',
+              ),
+            ],
+            const SizedBox(height: 16),
+            StatusCard(
+              icon: Icons.analytics_outlined,
+              title: 'Listener diagnostics',
+              message: _listenerDiagnostics,
+            ),
+          ] else ...[
+            const StatusCard(
+              icon: Icons.check_circle,
+              title: 'Mock session connected',
+              message:
+                  'Playback controls are ready for the real listener engine.',
+            ),
+          ],
+          const SizedBox(height: 16),
+          PlaybackControls(
+            delay: _delay,
+            volume: _volume,
+            muted: _muted,
+            onDelayChanged: (value) {
+              setState(() => _delay = value);
+              if (_engineMode) {
+                _engine.pumpListener(delayMs: value.round());
+              }
+            },
+            onVolumeChanged: (value) => setState(() => _volume = value),
+            onMuteChanged: (value) => setState(() => _muted = value),
+          ),
+        ],
       ],
     );
   }

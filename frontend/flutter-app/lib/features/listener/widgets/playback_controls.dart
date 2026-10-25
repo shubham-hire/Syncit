@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/liquid_glass.dart';
 
 class PlaybackControls extends StatelessWidget {
@@ -30,10 +31,12 @@ class PlaybackControls extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Playback',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              'PLAYBACK',
+              style: AppType.sectionLabel.copyWith(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.75),
+              ),
             ),
             const SizedBox(height: 16),
             Row(

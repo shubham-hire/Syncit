@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_theme.dart';
+
 class ListenerList extends StatelessWidget {
   const ListenerList({
     required this.listeners,
@@ -34,10 +36,12 @@ class ListenerList extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Listeners',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                  'LISTENERS',
+                  style: AppType.sectionLabel.copyWith(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.75),
+                  ),
                 ),
                 Text('${listeners.length}/5'),
               ],

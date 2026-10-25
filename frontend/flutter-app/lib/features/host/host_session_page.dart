@@ -261,98 +261,95 @@ class _HostSessionPageState extends State<HostSessionPage> {
   Widget build(BuildContext context) {
     return GlassScaffold(
       title: 'Host session',
+      largeTitle: 'Host session',
+      subtitle: 'Share this device\'s audio over a local Wi-Fi hotspot.',
       children: [
-              StatusCard(
-                icon: _sessionStarted ? Icons.play_circle : Icons.pause_circle,
-                title:
-                    _sessionStarted
-                        ? 'Session is ready'
-                        : 'Session not started',
-                message:
-                    _sessionStarted
-                        ? 'Listeners can join using the session information below.'
-                        : 'Start a local session after enabling the host hotspot.',
-                action:
-                    _sessionStarted
-                        ? null
-                        : FilledButton(
-                          onPressed: _startSession,
-                          child: const Text('Start session'),
-                        ),
+        StatusCard(
+          icon: _sessionStarted ? Icons.play_circle : Icons.pause_circle,
+          title: _sessionStarted ? 'Session is ready' : 'Session not started',
+          message:
+              _sessionStarted
+                  ? 'Listeners can join using the session information below.'
+                  : 'Start a local session after enabling the host hotspot.',
+          action:
+              _sessionStarted
+                  ? null
+                  : AppPillButton(
+                    label: 'Start session',
+                    onPressed: _startSession,
+                  ),
+        ),
+        const SizedBox(height: 16),
+        const HotspotInstructions(),
+        if (_engineMode && !_sessionStarted) ...[
+          const SizedBox(height: 16),
+          Card(
+            child: SwitchListTile(
+              title: const Text('Use synthetic test tone'),
+              subtitle: const Text(
+                'Diagnostic mode bypasses WASAPI and streams a generated tone.',
               ),
+              value: _syntheticSource,
+              onChanged: (value) {
+                setState(() => _syntheticSource = value);
+              },
+            ),
+          ),
+        ],
+        if (_sessionStarted) ...[
+          const SizedBox(height: 16),
+          SessionCodeCard(
+            sessionHex: _sessionInfo?.sessionHex,
+            tokenHex: _sessionInfo?.tokenHex,
+          ),
+          if (_engineMode) ...[
+            const SizedBox(height: 16),
+            if (_sessionInfo?.source == 'WASAPI loopback')
+              const StatusCard(
+                icon: Icons.warning_amber,
+                title: 'WASAPI same-device caution',
+                message:
+                    'WASAPI captures the host Windows default output. '
+                    'If a listener runs on this same PC and also plays to '
+                    'the default output, you will hear the original audio '
+                    'and the delayed relayed copy together. Use a separate '
+                    'listener device or output device for a clean test.',
+              ),
+            if (_sessionInfo?.source == 'WASAPI loopback')
               const SizedBox(height: 16),
-              const HotspotInstructions(),
-              if (_engineMode && !_sessionStarted) ...[
-                const SizedBox(height: 16),
-                Card(
-                  child: SwitchListTile(
-                    title: const Text('Use synthetic test tone'),
-                    subtitle: const Text(
-                      'Diagnostic mode bypasses WASAPI and streams a generated tone.',
-                    ),
-                    value: _syntheticSource,
-                    onChanged: (value) {
-                      setState(() => _syntheticSource = value);
-                    },
-                  ),
-                ),
-              ],
-              if (_sessionStarted) ...[
-                const SizedBox(height: 16),
-                SessionCodeCard(
-                  sessionHex: _sessionInfo?.sessionHex,
-                  tokenHex: _sessionInfo?.tokenHex,
-                ),
-                if (_engineMode) ...[
-                  const SizedBox(height: 16),
-                  if (_sessionInfo?.source == 'WASAPI loopback')
-                    const StatusCard(
-                      icon: Icons.warning_amber,
-                      title: 'WASAPI same-device caution',
-                      message:
-                          'WASAPI captures the host Windows default output. '
-                          'If a listener runs on this same PC and also plays to '
-                          'the default output, you will hear the original audio '
-                          'and the delayed relayed copy together. Use a separate '
-                          'listener device or output device for a clean test.',
-                    ),
-                  if (_sessionInfo?.source == 'WASAPI loopback')
-                    const SizedBox(height: 16),
-                  StatusCard(
-                    icon:
-                        _hostErrors.isEmpty
-                            ? Icons.monitor_heart
-                            : Icons.error_outline,
-                    title: 'Host diagnostics',
-                    message: _hostDiagnostics,
-                  ),
-                ],
-                if (_engineMode && _pendingEngineListeners > 0) ...[
-                  const SizedBox(height: 16),
-                  StatusCard(
-                    icon: Icons.pending_actions,
-                    title:
-                        '$_pendingEngineListeners listener${_pendingEngineListeners == 1 ? '' : 's'} waiting for approval',
-                    message:
-                        'Review the request before audio streaming begins.',
-                    action: FilledButton.icon(
-                      onPressed: _reviewPendingApprovals,
-                      icon: const Icon(Icons.rate_review),
-                      label: const Text('Review request'),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                ListenerList(
-                  listeners: _displayListeners,
-                  approvedListeners: _displayApproved,
-                  transportLabel:
-                      _engineMode ? 'Rust engine' : 'mock transport',
-                  onSimulateListener: _engineMode ? null : _addMockListener,
-                  onApprove: _approveListener,
-                  onRemove: _removeListener,
-                ),
-              ],
+            StatusCard(
+              icon:
+                  _hostErrors.isEmpty
+                      ? Icons.monitor_heart
+                      : Icons.error_outline,
+              title: 'Host diagnostics',
+              message: _hostDiagnostics,
+            ),
+          ],
+          if (_engineMode && _pendingEngineListeners > 0) ...[
+            const SizedBox(height: 16),
+            StatusCard(
+              icon: Icons.pending_actions,
+              title:
+                  '$_pendingEngineListeners listener${_pendingEngineListeners == 1 ? '' : 's'} waiting for approval',
+              message: 'Review the request before audio streaming begins.',
+              action: AppPillButton(
+                label: 'Review request',
+                icon: Icons.rate_review,
+                onPressed: _reviewPendingApprovals,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          ListenerList(
+            listeners: _displayListeners,
+            approvedListeners: _displayApproved,
+            transportLabel: _engineMode ? 'Rust engine' : 'mock transport',
+            onSimulateListener: _engineMode ? null : _addMockListener,
+            onApprove: _approveListener,
+            onRemove: _removeListener,
+          ),
+        ],
       ],
     );
   }
