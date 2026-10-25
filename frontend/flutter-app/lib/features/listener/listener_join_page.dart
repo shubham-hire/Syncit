@@ -26,6 +26,7 @@ class _ListenerJoinPageState extends State<ListenerJoinPage> {
   double _volume = 0.8;
   bool _muted = false;
   ListenerStatus? _status;
+  final List<String> _listenerEvents = <String>[];
 
   bool get _engineMode => _engine.availability == EngineAvailability.engine;
 
@@ -87,8 +88,19 @@ class _ListenerJoinPageState extends State<ListenerJoinPage> {
       return;
     }
     setState(() => _joined = true);
-    _engine.startListenerPolling((status) {
-      if (mounted) setState(() => _status = status);
+    _engine.startListenerPolling(_onListenerStatus);
+  }
+
+  void _onListenerStatus(ListenerStatus status) {
+    if (!mounted) return;
+    setState(() {
+      _status = status;
+      if (status.events.isNotEmpty) {
+        _listenerEvents.addAll(status.events);
+        if (_listenerEvents.length > 8) {
+          _listenerEvents.removeRange(0, _listenerEvents.length - 8);
+        }
+      }
     });
   }
 
@@ -102,9 +114,45 @@ class _ListenerJoinPageState extends State<ListenerJoinPage> {
   String get _engineStatusLine {
     final status = _status;
     if (status == null) return 'Waiting for the first engine pump…';
-    return '${status.state} · rendered ${status.rendered} · '
+    final state =
+        status.state == 'PendingApproval'
+            ? 'Waiting for host approval'
+            : status.state;
+    return '$state · rendered ${status.rendered} · '
         'concealed ${status.concealed} · buffer ${status.buffered} · '
-        'RTT ${status.roundTripMicros < 0 ? '-' : '${status.roundTripMicros ~/ 1000} ms'}';
+        'RTT ${status.roundTripMicros < 0 ? '-' : '${status.roundTripMicros ~/ 1000} ms'} · '
+        'output ${status.output}';
+  }
+
+  String get _listenerDiagnostics {
+    final status = _status;
+    if (status == null) return 'Waiting for the first engine pump…';
+    final lines = <String>[
+      'received ${status.received} · inserted ${status.inserted} · '
+          'buffer ${status.buffered}',
+      'invalid ${status.invalid} · wrong session ${status.wrongSession} · '
+          'unauthenticated ${status.unauthenticated}',
+      'duplicate ${status.duplicate} · late ${status.late} · '
+          'capacity drops ${status.capacityDrops}',
+      'clock offset ${status.offsetMicros ~/ 1000} ms · '
+          'sink failures ${status.sinkFailures} · '
+          'watchdog timeouts ${status.watchdogTimeouts} · '
+          'rejoins ${status.rejoinAttempts}',
+    ];
+    if (_listenerEvents.isNotEmpty) {
+      lines.add('events\n${_listenerEvents.join('\n')}');
+    } else {
+      lines.add('events none');
+    }
+    return lines.join('\n');
+  }
+
+  bool get _isLoopbackHost {
+    final host = _hostController.text.trim().toLowerCase();
+    return host == 'localhost' ||
+        host.startsWith('localhost:') ||
+        host.startsWith('127.') ||
+        host.startsWith('[::1]');
   }
 
   @override
@@ -132,15 +180,42 @@ class _ListenerJoinPageState extends State<ListenerJoinPage> {
                     icon:
                         (_status?.active ?? false)
                             ? Icons.surround_sound
+                            : _status?.state == 'PendingApproval'
+                            ? Icons.pending_actions
                             : Icons.sync,
-                    title: 'Session connected',
+                    title:
+                        (_status?.active ?? false)
+                            ? 'Session connected'
+                            : _status?.state == 'PendingApproval'
+                            ? 'Waiting for host approval'
+                            : 'Connecting to session',
                     message: _engineStatusLine,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Volume is applied on-device at playback (Milestone 6); '
-                    'the engine currently renders into a null sink.',
+                    'Decoded audio is sent to the Windows default output. '
+                    'Volume and mute controls remain local UI controls for now.',
                     style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  if (_isLoopbackHost &&
+                      _status?.output == 'Windows default output') ...[
+                    const SizedBox(height: 16),
+                    const StatusCard(
+                      icon: Icons.warning_amber,
+                      title: 'Same-PC loopback warning',
+                      message:
+                          'The host captures the Windows default output and '
+                          'this listener also plays to that output. On the same '
+                          'PC, this produces the original audio plus a delayed '
+                          'relayed copy. Use a separate listener device or choose '
+                          'a different output device.',
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  StatusCard(
+                    icon: Icons.analytics_outlined,
+                    title: 'Listener diagnostics',
+                    message: _listenerDiagnostics,
                   ),
                 ] else ...[
                   const StatusCard(

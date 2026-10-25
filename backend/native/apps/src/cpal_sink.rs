@@ -12,7 +12,9 @@ use cpal::{
     SupportedStreamConfig,
 };
 use std::collections::VecDeque;
+use std::sync::mpsc::{self, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
 
 /// Frames buffered ahead before the oldest complete frame is dropped. Bounds
 /// memory if the audio callback stalls; oversized backlog means the output
@@ -52,9 +54,12 @@ impl CpalSink {
                     (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16
                 })?
             }
+            SampleFormat::U8 => {
+                build_stream::<u8>(&device, &config, Arc::clone(&queue), float_to_u8)?
+            }
             other => {
                 return Err(sink_error(format!(
-                    "output device uses unsupported sample format {other:?} (need f32 or i16)"
+                    "output device uses unsupported sample format {other:?} (need f32, i16, or u8)"
                 )));
             }
         };
@@ -113,6 +118,88 @@ impl PcmSink for CpalSink {
     }
 }
 
+/// Send-safe wrapper that owns the CPAL stream on a dedicated output thread.
+///
+/// CPAL deliberately marks its stream handle as not `Send`, while the FFI
+/// bridge stores listener entries behind a cross-thread mutex. This adapter
+/// keeps the non-`Send` stream and [`CpalSink`] on one worker thread and sends
+/// decoded mono PCM frames to it through a bounded channel.
+pub struct CpalChannelSink {
+    sender: Option<SyncSender<Vec<i16>>>,
+    thread: Option<JoinHandle<()>>,
+    frames_written: u64,
+}
+
+impl CpalChannelSink {
+    const QUEUE_CAPACITY: usize = 64;
+
+    /// Opens the default output device on the worker thread and waits until
+    /// the stream has either started or reported an initialization error.
+    pub fn new(volume: f32) -> Result<Self, PlaybackError> {
+        let (sender, receiver) = mpsc::sync_channel::<Vec<i16>>(Self::QUEUE_CAPACITY);
+        let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
+        let thread = thread::spawn(move || match CpalSink::new(volume) {
+            Ok(mut sink) => {
+                let _ = ready_sender.send(Ok(()));
+                while let Ok(frame) = receiver.recv() {
+                    if let Err(error) = sink.write_frame(&frame) {
+                        eprintln!("audio output error: {error}");
+                        break;
+                    }
+                }
+            }
+            Err(error) => {
+                let _ = ready_sender.send(Err(error.to_string()));
+            }
+        });
+
+        match ready_receiver.recv() {
+            Ok(Ok(())) => Ok(Self {
+                sender: Some(sender),
+                thread: Some(thread),
+                frames_written: 0,
+            }),
+            Ok(Err(message)) => {
+                let _ = thread.join();
+                Err(sink_error(message))
+            }
+            Err(_) => {
+                let _ = thread.join();
+                Err(sink_error("audio output worker exited during startup"))
+            }
+        }
+    }
+}
+
+impl PcmSink for CpalChannelSink {
+    fn write_frame(&mut self, pcm: &[i16]) -> Result<(), PlaybackError> {
+        let sender = self
+            .sender
+            .as_ref()
+            .ok_or_else(|| sink_error("audio output worker is stopped"))?;
+        match sender.try_send(pcm.to_vec()) {
+            Ok(()) => {
+                self.frames_written = self.frames_written.saturating_add(1);
+                Ok(())
+            }
+            Err(TrySendError::Full(_)) => Err(sink_error("audio output queue is full")),
+            Err(TrySendError::Disconnected(_)) => {
+                Err(sink_error("audio output worker disconnected"))
+            }
+        }
+    }
+}
+
+impl Drop for CpalChannelSink {
+    fn drop(&mut self) {
+        // Close the channel before joining so the worker can leave recv().
+        self.sender.take();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
 fn pick_48khz_config(device: &Device) -> Result<SupportedStreamConfig, PlaybackError> {
     let ranges = device
         .supported_output_configs()
@@ -135,7 +222,7 @@ fn pick_48khz_config(device: &Device) -> Result<SupportedStreamConfig, PlaybackE
     fallback.ok_or_else(|| sink_error("the default output device does not support 48 kHz audio"))
 }
 
-fn build_stream<T: cpal::SizedSample + cpal::FromSample<f32>>(
+fn build_stream<T: cpal::SizedSample>(
     device: &Device,
     config: &SupportedStreamConfig,
     queue: Arc<Mutex<VecDeque<f32>>>,
@@ -166,8 +253,26 @@ fn build_stream<T: cpal::SizedSample + cpal::FromSample<f32>>(
     Ok(stream)
 }
 
+fn float_to_u8(sample: f32) -> u8 {
+    (((sample.clamp(-1.0, 1.0) + 1.0) * 0.5) * f32::from(u8::MAX)).round() as u8
+}
+
 fn sink_error(message: impl Into<String>) -> PlaybackError {
     PlaybackError::Sink {
         message: message.into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::float_to_u8;
+
+    #[test]
+    fn unsigned_eight_bit_output_maps_signed_pcm_range() {
+        assert_eq!(float_to_u8(-1.0), 0);
+        assert_eq!(float_to_u8(0.0), 128);
+        assert_eq!(float_to_u8(1.0), 255);
+        assert_eq!(float_to_u8(-2.0), 0);
+        assert_eq!(float_to_u8(2.0), 255);
     }
 }

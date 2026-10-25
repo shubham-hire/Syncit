@@ -1,5 +1,43 @@
 # Changelog
 
+## October 25, 2026 — Windows Flutter listener output
+
+- Replaced the Flutter FFI listener's per-pump `NullSink` with a persistent
+  Windows CPAL/WASAPI output path. Decoded PCM frames now remain connected to
+  the default Windows output between Dart pump calls.
+- Added `CpalChannelSink`, which owns CPAL's deliberately non-`Send` stream on
+  a dedicated worker thread and exposes a bounded, `Send`-safe PCM bridge to
+  the FFI handle table.
+- Added unsigned 8-bit (`U8`) output conversion for Windows devices that
+  advertise 8-bit PCM instead of float or signed 16-bit samples.
+- Listener status now reports the active output label. Rust tests continue to
+  use a deterministic null sink, while release Windows builds require a
+  default output device and report a clear startup error if none is available.
+- Volume and mute controls remain UI-only until native sink controls are
+  connected.
+- Added a host-side pending-approval banner and review dialog with Approve and
+  Reject actions. The listener now presents `Waiting for host approval`
+  instead of an opaque `PendingApproval` status while audio streaming is
+  correctly paused.
+- Fixed host event serialization: a trailing comma in the FFI event payload
+  prevented Dart from parsing `ListenerJoined`, so pending listeners were not
+  reaching the approval UI. The Dart parser also tolerates the legacy payload
+  while deployed DLLs are refreshed.
+- Added a host source selector for the Flutter engine page: WASAPI loopback is
+  the default, while a generated synthetic tone can isolate transport and
+  listener-output problems.
+- Added host diagnostics for runtime errors/events and listener diagnostics for
+  packet receipt, authentication, jitter-buffer drops, clock offset, sink
+  failures, watchdog timeouts, and rejoin attempts.
+- Rebases the first host audio packet timestamp when the first listener becomes
+  active. A host can wait for approval long after startup; without this rebase,
+  the listener treated the first live packets as stale, skipped their sequence
+  numbers, and reported increasing late packets with an empty buffer.
+- Added explicit same-PC WASAPI warnings. Running host and listener on the same
+  default output intentionally produces the original audio plus a delayed
+  loopback copy; the clean WASAPI test uses a separate listener device or
+  output.
+
 ## October 25, 2026 — Windows fix + Milestone 5 wiring (local session)
 
 Implemented and gated on the Windows development machine. Committed locally;

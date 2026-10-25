@@ -39,15 +39,19 @@ real engine when the library loads, and keep the exact mock behavior
 otherwise (widget tests run entirely in mock mode):
 
 - `host_session_page.dart` — `startHost(synthetic: false, autoApprove: false)`
-  starts the real WASAPI host, `startHostPolling` feeds `HostEvent.parse`d
-  events into the listener list (join/reconnect/approve/remove/timeout), and
-  the approve/remove buttons send `hostCommand` with the listener hex.
+  starts the real WASAPI host by default. Before starting, the page can switch
+  to a generated synthetic tone for transport/output diagnostics. Host polling
+  exposes running state, recent events, and runtime errors; the approve/remove
+  buttons send `hostCommand` with the listener hex.
 - `listener_join_page.dart` — engine mode collects host address plus
   session/token hex (the host prints them), `joinListener` joins, and
   `startListenerPolling` renders live state, rendered/concealed frames,
-  buffer depth and RTT. The delay slider applies live through
-  `pumpListener(delayMs: value)`; volume stays local until the platform
-  audio output exists.
+  received/inserted packets, invalid or unauthenticated packets, duplicate and
+  late packets, buffer depth, clock offset, RTT, playback failures, recent
+  events, and the active output label. On Windows, the FFI bridge keeps a
+  persistent CPAL/WASAPI output stream alive between pump calls; the delay
+  slider applies live through `pumpListener(delayMs: value)`. Volume and mute
+  remain local UI controls until native sink controls are wired.
 
 Both engine pages release their native host/listener handles from
 `EngineController.dispose()`. Listener leave sends an explicit departure

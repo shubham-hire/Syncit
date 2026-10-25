@@ -13,8 +13,10 @@
 //! [`audiosync_ffi_free_string`].
 
 use audiosync_apps::{hex16, parse_hex16, random_bytes16};
+#[cfg(any(not(windows), test))]
+use audiosync_runtime::NullSink;
 use audiosync_runtime::{
-    HostCommand, HostLoopConfig, HostLoopHandle, ListenerRuntime, NullSink, PlaybackConfig,
+    HostCommand, HostLoopConfig, HostLoopHandle, ListenerRuntime, PcmSink, PlaybackConfig,
     PlaybackScheduler, spawn_host_loop_with_factory,
 };
 use audiosync_session::ListenerState;
@@ -30,6 +32,8 @@ use json::JsonWriter;
 const MAX_HOSTS: usize = 8;
 const MAX_LISTENERS: usize = 8;
 
+type ListenerSink = Box<dyn PcmSink + Send>;
+
 struct HostEntry {
     handle: HostLoopHandle,
 }
@@ -37,6 +41,7 @@ struct HostEntry {
 struct ListenerEntry {
     runtime: Mutex<ListenerRuntime>,
     scheduler: Mutex<PlaybackScheduler>,
+    sink: Mutex<ListenerSink>,
     events: Mutex<Vec<String>>,
 }
 
@@ -51,6 +56,53 @@ fn bridge() -> &'static Bridge {
         hosts: Mutex::new((0..MAX_HOSTS).map(|_| None).collect()),
         listeners: Mutex::new((0..MAX_LISTENERS).map(|_| None).collect()),
     })
+}
+
+/// Opens the listener's persistent platform output.
+///
+/// Flutter tests intentionally use a null sink so they remain deterministic
+/// and do not require an audio endpoint. Release Windows builds use the same
+/// CPAL sink as the listener CLI, which keeps the WASAPI stream alive between
+/// FFI pump calls and feeds the default output device.
+fn create_listener_sink() -> Result<ListenerSink, String> {
+    #[cfg(all(windows, not(test)))]
+    {
+        audiosync_apps::cpal_sink::CpalChannelSink::new(0.8)
+            .map(|sink| Box::new(sink) as ListenerSink)
+            .map_err(|error| format!("audio output unavailable: {error}"))
+    }
+
+    #[cfg(any(not(windows), test))]
+    {
+        Ok(Box::new(NullSink::default()))
+    }
+}
+
+fn listener_output_label() -> &'static str {
+    #[cfg(all(windows, not(test)))]
+    {
+        "Windows default output"
+    }
+    #[cfg(any(not(windows), test))]
+    {
+        "null sink"
+    }
+}
+
+fn host_source_label(synthetic: bool) -> &'static str {
+    #[cfg(windows)]
+    {
+        if synthetic {
+            "synthetic tone"
+        } else {
+            "WASAPI loopback"
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = synthetic;
+        "synthetic tone (non-Windows fallback)"
+    }
 }
 
 fn alloc_string(text: String) -> *mut c_char {
@@ -160,6 +212,7 @@ fn host_start(request: &str) -> Result<String, String> {
     writer.field("bind", &bind_address);
     writer.field("session", &hex16(&session_bytes));
     writer.field("token", &hex16(&token_bytes));
+    writer.field("source", host_source_label(synthetic));
     Ok(writer.finish())
 }
 
@@ -231,7 +284,7 @@ fn host_command(request: &str) -> Result<String, String> {
         .map(|event| {
             let mut writer = JsonWriter::new();
             writer.field("event", &format!("{event:?}"));
-            writer.finish_inner()
+            writer.finish()
         })
         .collect();
     let errors: Vec<String> = entry
@@ -319,6 +372,7 @@ fn listener_start(request: &str) -> Result<String, String> {
     runtime
         .set_read_timeout(Some(Duration::from_millis(5)))
         .map_err(|error| format!("listener socket: {error}"))?;
+    let sink = create_listener_sink()?;
     runtime
         .send_join()
         .map_err(|error| format!("join request: {error}"))?;
@@ -346,6 +400,7 @@ fn listener_start(request: &str) -> Result<String, String> {
     listeners[slot] = Some(ListenerEntry {
         runtime: Mutex::new(runtime),
         scheduler: Mutex::new(scheduler),
+        sink: Mutex::new(sink),
         events: Mutex::new(Vec::new()),
     });
 
@@ -353,6 +408,7 @@ fn listener_start(request: &str) -> Result<String, String> {
     writer.raw("ok", "true");
     writer.raw("handle", &slot.to_string());
     writer.field("bind", &bind_address);
+    writer.field("output", listener_output_label());
     Ok(writer.finish())
 }
 
@@ -392,13 +448,13 @@ fn listener_pump(request: &str) -> Result<String, String> {
         .scheduler
         .lock()
         .map_err(|_| "scheduler lock poisoned")?;
+    let mut sink = entry.sink.lock().map_err(|_| "sink lock poisoned")?;
 
     if let Some(delay_ms) = json::get_u64(request, "delay_ms") {
         scheduler.set_listener_delay(Duration::from_millis(delay_ms));
     }
 
-    let mut sink = NullSink::default();
-    if let Err(error) = scheduler.pump(&mut runtime, &mut sink) {
+    if let Err(error) = scheduler.pump(&mut runtime, sink.as_mut()) {
         push_event(&entry.events, &format!("playback error: {error}"));
     }
     for event in scheduler.take_control_events() {
@@ -410,6 +466,7 @@ fn listener_pump(request: &str) -> Result<String, String> {
     let session = runtime.session();
     let mut writer = JsonWriter::new();
     writer.raw("ok", "true");
+    writer.field("output", listener_output_label());
     writer.field("state", &format!("{:?}", session.state()));
     writer.raw(
         "active",
@@ -422,10 +479,16 @@ fn listener_pump(request: &str) -> Result<String, String> {
     writer.raw("rendered", &playback.rendered_frames.to_string());
     writer.raw("concealed", &playback.concealed_frames.to_string());
     writer.raw("received", &pipeline.received_packets.to_string());
+    writer.raw("inserted", &pipeline.inserted_packets.to_string());
+    writer.raw("invalid", &pipeline.invalid_packets.to_string());
+    writer.raw("wrong_session", &pipeline.wrong_session_packets.to_string());
     writer.raw(
         "unauthenticated",
         &pipeline.unauthenticated_packets.to_string(),
     );
+    writer.raw("duplicate", &pipeline.duplicate_packets.to_string());
+    writer.raw("late", &pipeline.too_late_packets.to_string());
+    writer.raw("capacity_drops", &pipeline.capacity_drops.to_string());
     writer.raw(
         "buffered",
         &runtime.pipeline().buffered_packets().to_string(),
@@ -444,6 +507,9 @@ fn listener_pump(request: &str) -> Result<String, String> {
             .map(|v| v.to_string())
             .unwrap_or("0".to_owned()),
     );
+    writer.raw("sink_failures", &playback.sink_failures.to_string());
+    writer.raw("watchdog_timeouts", &playback.watchdog_timeouts.to_string());
+    writer.raw("rejoin_attempts", &playback.rejoin_attempts.to_string());
     let drained: Vec<String> = entry
         .events
         .lock()
@@ -568,6 +634,10 @@ mod tests {
             r#"{"bind":"127.0.0.1:0","synthetic":true,"auto_approve":true,"max_listeners":2}"#,
         );
         assert!(host_json.contains("\"ok\":true"), "host start: {host_json}");
+        assert!(
+            host_json.contains("\"source\":\"synthetic tone"),
+            "host source: {host_json}"
+        );
         let session = json::get_str(&host_json, "session").expect("session echoed");
         let token = json::get_str(&host_json, "token").expect("token echoed");
         let bind = json::get_str(&host_json, "bind").expect("bind echoed");
@@ -604,6 +674,18 @@ mod tests {
             if let Some(value) = json::get_u64(&status, "rendered") {
                 rendered = value;
                 if rendered >= 20 {
+                    assert!(
+                        status.contains("\"received\":"),
+                        "listener metrics: {status}"
+                    );
+                    assert!(
+                        status.contains("\"inserted\":"),
+                        "listener metrics: {status}"
+                    );
+                    assert!(
+                        status.contains("\"capacity_drops\":"),
+                        "listener metrics: {status}"
+                    );
                     break;
                 }
             }

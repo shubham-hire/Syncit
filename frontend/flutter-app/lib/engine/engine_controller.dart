@@ -16,6 +16,37 @@ import 'ffi_bindings.dart';
 /// Whether the real Rust engine is driving the session.
 enum EngineAvailability { engine, mock }
 
+List<String> _stringList(Object? value) {
+  if (value is! List) return const <String>[];
+  return value.whereType<String>().toList(growable: false);
+}
+
+/// Parsed host command/polling status from one engine call.
+class HostStatus {
+  HostStatus({
+    required this.running,
+    required this.events,
+    required this.errors,
+  });
+
+  factory HostStatus.fromMap(Map<String, dynamic> map) {
+    final errors = <String>[..._stringList(map['errors'])];
+    final requestError = map['error'];
+    if (requestError is String && requestError.isNotEmpty) {
+      errors.add(requestError);
+    }
+    return HostStatus(
+      running: map['running'] == true,
+      events: _stringList(map['events']),
+      errors: errors,
+    );
+  }
+
+  final bool running;
+  final List<String> events;
+  final List<String> errors;
+}
+
 /// Parsed listener playback status from one engine pump.
 class ListenerStatus {
   ListenerStatus({
@@ -23,8 +54,21 @@ class ListenerStatus {
     required this.active,
     required this.rendered,
     required this.concealed,
+    required this.received,
+    required this.inserted,
+    required this.invalid,
+    required this.wrongSession,
+    required this.unauthenticated,
+    required this.duplicate,
+    required this.late,
+    required this.capacityDrops,
+    required this.sinkFailures,
+    required this.watchdogTimeouts,
+    required this.rejoinAttempts,
     required this.buffered,
     required this.roundTripMicros,
+    required this.offsetMicros,
+    required this.output,
     required this.events,
   });
 
@@ -33,17 +77,43 @@ class ListenerStatus {
     active: map['active'] == true,
     rendered: (map['rendered'] as num?)?.toInt() ?? 0,
     concealed: (map['concealed'] as num?)?.toInt() ?? 0,
+    received: (map['received'] as num?)?.toInt() ?? 0,
+    inserted: (map['inserted'] as num?)?.toInt() ?? 0,
+    invalid: (map['invalid'] as num?)?.toInt() ?? 0,
+    wrongSession: (map['wrong_session'] as num?)?.toInt() ?? 0,
+    unauthenticated: (map['unauthenticated'] as num?)?.toInt() ?? 0,
+    duplicate: (map['duplicate'] as num?)?.toInt() ?? 0,
+    late: (map['late'] as num?)?.toInt() ?? 0,
+    capacityDrops: (map['capacity_drops'] as num?)?.toInt() ?? 0,
+    sinkFailures: (map['sink_failures'] as num?)?.toInt() ?? 0,
+    watchdogTimeouts: (map['watchdog_timeouts'] as num?)?.toInt() ?? 0,
+    rejoinAttempts: (map['rejoin_attempts'] as num?)?.toInt() ?? 0,
     buffered: (map['buffered'] as num?)?.toInt() ?? 0,
     roundTripMicros: (map['rtt_us'] as num?)?.toInt() ?? -1,
-    events: (map['events'] as List?)?.cast<String>() ?? const <String>[],
+    offsetMicros: (map['offset_us'] as num?)?.toInt() ?? 0,
+    output: map['output'] as String? ?? 'unknown',
+    events: _stringList(map['events']),
   );
 
   final String state;
   final bool active;
   final int rendered;
   final int concealed;
+  final int received;
+  final int inserted;
+  final int invalid;
+  final int wrongSession;
+  final int unauthenticated;
+  final int duplicate;
+  final int late;
+  final int capacityDrops;
+  final int sinkFailures;
+  final int watchdogTimeouts;
+  final int rejoinAttempts;
   final int buffered;
   final int roundTripMicros;
+  final int offsetMicros;
+  final String output;
   final List<String> events;
 }
 
@@ -54,6 +124,7 @@ class HostSessionInfo {
     required this.bindAddress,
     required this.sessionHex,
     required this.tokenHex,
+    required this.source,
   });
 
   factory HostSessionInfo.fromMap(Map<String, dynamic> map) => HostSessionInfo(
@@ -61,12 +132,14 @@ class HostSessionInfo {
     bindAddress: map['bind'] as String? ?? '',
     sessionHex: map['session'] as String? ?? '',
     tokenHex: map['token'] as String? ?? '',
+    source: map['source'] as String? ?? 'unknown',
   );
 
   final int handle;
   final String bindAddress;
   final String sessionHex;
   final String tokenHex;
+  final String source;
 }
 
 /// Owns one host or listener engine session.
@@ -125,10 +198,12 @@ class EngineController {
     return info;
   }
 
-  /// Sends approve/remove/end to the running host and returns raw events.
-  List<String> hostCommand(String command, {String? listenerHex}) {
+  /// Sends approve/remove/end to the running host and returns diagnostics.
+  HostStatus hostCommand(String command, {String? listenerHex}) {
     final bindings = _bindings;
-    if (bindings == null || _hostHandle < 0) return const [];
+    if (bindings == null || _hostHandle < 0) {
+      return HostStatus(running: false, events: const [], errors: const []);
+    }
     final response = _decode(
       bindings.hostCommand(
         jsonEncode({
@@ -138,7 +213,7 @@ class EngineController {
         }),
       ),
     );
-    return (response['events'] as List?)?.cast<String>() ?? const <String>[];
+    return HostStatus.fromMap(response);
   }
 
   /// Joins a host as a listener. Returns false in mock mode.
@@ -187,7 +262,7 @@ class EngineController {
   /// Polls the host for retained events (joins, approvals, timeouts) without
   /// sending a command; drives the host page's listener list.
   void startHostPolling(
-    void Function(List<String> events) onEvents, {
+    void Function(HostStatus status) onStatus, {
     Duration interval = const Duration(milliseconds: 250),
   }) {
     stopPolling();
@@ -196,9 +271,7 @@ class EngineController {
     _poll = Timer.periodic(interval, (_) {
       if (_hostHandle < 0) return;
       final response = _decode(bindings.hostCommand('{"handle":$_hostHandle}'));
-      onEvents(
-        (response['events'] as List?)?.cast<String>() ?? const <String>[],
-      );
+      onStatus(HostStatus.fromMap(response));
     });
   }
 
@@ -248,9 +321,15 @@ class HostEvent {
   /// `{"event":"<Rust Debug of the SessionEvent>"}` and Rust renders ids as
   /// `ListenerId([byte, byte, ...])`, so the hex is rebuilt from the bytes.
   static HostEvent? parse(String raw) {
-    var text = raw;
+    var normalized = raw.trim();
+    // Older FFI DLLs emitted an extra comma after the nested event object.
+    // Accept it while deployed DLLs are being refreshed after the fix.
+    if (normalized.endsWith(',')) {
+      normalized = normalized.substring(0, normalized.length - 1).trimRight();
+    }
+    var text = normalized;
     try {
-      final decoded = jsonDecode(raw);
+      final decoded = jsonDecode(normalized);
       if (decoded is Map && decoded['event'] is String) {
         text = decoded['event'] as String;
       }

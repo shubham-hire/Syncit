@@ -209,7 +209,9 @@ pub struct AudioPacketPump<S> {
 
 impl<S: PcmSource> AudioPacketPump<S> {
     /// Creates a packet pump from a PCM source, the session identity, and the
-    /// per-session token used to authenticate every outgoing packet.
+    /// per-session token used to authenticate every outgoing packet. The
+    /// timestamp is an initial seed; callers can rebase it before the first
+    /// frame with [`Self::start_at_micros`].
     pub fn new(
         source: S,
         session_id: SessionId,
@@ -263,6 +265,18 @@ impl<S: PcmSource> AudioPacketPump<S> {
 
     pub const fn capture_start_micros(&self) -> u64 {
         self.capture_start_micros
+    }
+
+    /// Rebases the first packet timestamp before the stream starts.
+    ///
+    /// A host can be created well before its first listener is approved. In
+    /// that case the constructor's seed would make the first live packet look
+    /// stale by the entire setup duration. Once a frame has been produced, the
+    /// timestamp timeline is fixed and this method intentionally does nothing.
+    pub fn start_at_micros(&mut self, capture_start_micros: u64) {
+        if self.frame_index == 0 {
+            self.capture_start_micros = capture_start_micros;
+        }
     }
 
     pub const fn source(&self) -> &S {
@@ -473,6 +487,22 @@ mod tests {
         assert!(!second.payload.is_empty());
         assert_eq!(pump.next_sequence(), 2);
         assert_eq!(pump.frame_index(), 2);
+    }
+
+    #[test]
+    fn packet_pump_rebases_only_before_the_first_frame() {
+        let mut pump =
+            AudioPacketPump::new(SyntheticPcmSource::new(220.0), [0x31; 16], [0x41; 16], 1)
+                .expect("synthetic source should initialize");
+
+        pump.start_at_micros(10_000);
+        assert_eq!(pump.capture_start_micros(), 10_000);
+
+        let first = pump.next_packet().expect("first packet should encode");
+        pump.start_at_micros(20_000);
+
+        assert_eq!(first.timestamp_micros, 10_000);
+        assert_eq!(pump.capture_start_micros(), 10_000);
     }
 
     #[test]

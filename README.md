@@ -147,6 +147,12 @@ For the first real hotspot experiment (Phase 6), run the host on the Windows
 machine with its Mobile Hotspot enabled, allow the UDP port through the
 firewall, and point the listener at the hotspot-side host address.
 
+Do not judge WASAPI playback by running the host and listener on the same PC
+with the same Windows default output. WASAPI loopback captures that output,
+while the listener plays the captured stream back to it, so the direct source
+and delayed relay are intentionally audible together. Use a second device or
+route the listener to a different output device for the real-audio test.
+
 ## Run the Flutter prototype
 
 ```bash
@@ -157,9 +163,11 @@ flutter run -d windows
 
 The UI drives the real Rust engine when `audiosync_ffi.dll` is built
 (`cargo build -p audiosync-ffi --release`) and falls back to mock session
-state otherwise — see `lib/engine/README.md`. Real platform audio output
-(playing captured PCM on the listener device) is the next integration
-milestone.
+state otherwise — see `lib/engine/README.md`. Windows listener sessions now
+open a persistent CPAL/WASAPI output stream for decoded PCM; Android output
+and native volume/mute control remain future integration work. The Windows host
+page defaults to WASAPI loopback, offers a synthetic-tone diagnostic mode, and
+the live pages expose packet, timing, output, and runtime-error diagnostics.
 
 ## Tests and checks
 

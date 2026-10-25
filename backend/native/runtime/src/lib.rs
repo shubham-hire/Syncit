@@ -276,13 +276,16 @@ impl<S: PcmSource> HostRuntime<S> {
     ///
     /// If there are no active listeners, no source frame is consumed. This
     /// keeps the first packet timestamp aligned with the start of actual
-    /// approved playback rather than silently advancing during setup.
+    /// approved playback rather than silently advancing during setup. The
+    /// timestamp seed is rebased on that first active send because the host
+    /// runtime may have been waiting for approval for an arbitrary duration.
     pub fn send_next_audio(&mut self) -> Result<AudioFanoutReport, HostRuntimeError> {
         let destinations = self.session.active_listener_endpoints();
         if destinations.is_empty() {
             return Ok(AudioFanoutReport::default());
         }
 
+        self.packet_pump.start_at_micros(monotonic_micros() as u64);
         let packet = self.packet_pump.next_packet()?;
         Ok(AudioPacketFanout::new(&self.transport).send_packet(&packet, destinations)?)
     }
@@ -926,9 +929,11 @@ mod tests {
             }
         );
 
+        let before_audio_micros = monotonic_micros() as u64;
         let report = host
             .send_next_audio()
             .expect("host should send one audio packet");
+        let after_audio_micros = monotonic_micros() as u64;
         assert_eq!(report.attempted, 1);
         assert_eq!(report.sent, 1);
         assert!(report.is_complete());
@@ -941,7 +946,13 @@ mod tests {
         let packet = AudioPacket::decode(&bytes[..length]).expect("audio packet should decode");
         assert_eq!(packet.session_id, session_id());
         assert_eq!(packet.sequence, 0);
-        assert_eq!(packet.timestamp_micros, 1_000_000);
+        assert!(
+            (before_audio_micros..=after_audio_micros).contains(&packet.timestamp_micros),
+            "first live packet timestamp {} was not rebased near {}..{}",
+            packet.timestamp_micros,
+            before_audio_micros,
+            after_audio_micros
+        );
     }
 
     #[test]

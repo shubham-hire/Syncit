@@ -4,8 +4,7 @@
 //! string arrays, plus tolerant `key` lookup for scalar values. Input comes
 //! from our own Dart layer, so the reader trades strictness for compactness.
 
-/// Builds a flat JSON object. Use [`JsonWriter::finish_inner`] for nested
-/// array elements (already-quoted strings).
+/// Builds a flat JSON object and string arrays.
 pub struct JsonWriter {
     buffer: String,
     first: bool,
@@ -71,13 +70,6 @@ impl JsonWriter {
     /// Closes the object and returns the JSON text.
     pub fn finish(mut self) -> String {
         self.buffer.push('}');
-        self.buffer
-    }
-
-    /// Returns the object text without the closing brace, closing it instead
-    /// with a comma so the caller can embed it inside another object.
-    pub fn finish_inner(mut self) -> String {
-        self.buffer.push_str("},");
         self.buffer
     }
 }
