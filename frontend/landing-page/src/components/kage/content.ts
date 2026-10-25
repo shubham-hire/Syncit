@@ -1,13 +1,13 @@
 export const navLinks = [
-  { id: "gate", label: "How It Works" },
+  { id: "gate", label: "How it works" },
   { id: "pathways", label: "Host + Listener" },
-  { id: "lessons", label: "Sync Features" },
+  { id: "lessons", label: "Sync features" },
   { id: "eternity", label: "Prototype" },
 ] as const;
 
 export const heroAction = {
-  label: "See the host and listener flow",
-  href: "#pathways",
+  label: "See how it works",
+  href: "#gate",
 } as const;
 
 export const downloadAction = {
@@ -15,94 +15,96 @@ export const downloadAction = {
   href: "https://github.com/shubham-hire/Syncit/releases/latest",
 } as const;
 
-export const heroChapters = [
+export const statusPill =
+  "Prototype · mock host/listener flows, offline timing core — real audio next";
+
+export const steps = [
   {
     num: "01",
-    title: "One host, several listeners.",
-    text: "The target flow is one Windows host and two to five Android listeners.",
+    title: "Host starts a session",
+    text: "A Windows machine becomes the host. It captures whatever is playing and opens a session on the local Wi-Fi network.",
   },
   {
     num: "02",
-    title: "Local-first by design.",
-    text: "The planned session uses the host's Wi-Fi network without requiring internet access.",
+    title: "Listeners join with a code",
+    text: "Friends on Android enter the session code. The host approves each listener — no accounts, no pairing, no internet.",
   },
   {
     num: "03",
-    title: "Personal playback controls.",
-    text: "The Flutter UI prototype includes delay, volume, and mute controls per listener.",
+    title: "Everyone hears it in sync",
+    text: "Timestamped packets and per-listener delay tuning keep every pair of headphones on the same beat.",
   },
-  {
-    num: "04",
-    title: "A measured first step.",
-    text: "The Rust core and offline simulator come before real capture and playback integration.",
-  },
-];
+] as const;
 
-export const receivers = [
+export const flows = [
   {
     tag: "Host",
-    alt: "Audio equipment for a shared listening session",
-    src: "https://lh3.googleusercontent.com/aida/AEtjO1V2beej4lV71lW2SNXwI3590DwyA9Gf_0d6o-6dOt9Cnr5LQ0uR73swN2mXFQ5BOCgwhmWMDC3TZJB3CA0cgyw_AkVXWifWBYwwb5Id_ZT_A-FbfPSc_wZ5YRafubuTWK8AWvU9ZxRzRbBuf1GIq5J_JNEQyTOGcs8NYHXSNmemDoExxSrHJyKdzq_n-8ki3Bd_KM3b7mUzFFT-cL0AWJsgqGWYHQHgitFkb7RdENLy0ixjwHutnK08fbo",
-    title: "Prototype the host flow",
-    text: "The current Flutter flow models a host starting a session, showing a code, and approving or removing listeners.",
-    metaLeft: "Windows first",
-    metaRight: "Session host",
+    title: "One host, in control.",
+    text: "The host flow models a session code, a live listener list, and one-tap approve or remove — built for the person whose machine is playing the music.",
+    meta: ["Windows first", "Session host"],
+    kind: "host" as const,
   },
   {
     tag: "Listener",
-    alt: "Wireless earbuds for a listener",
-    src: "https://lh3.googleusercontent.com/aida/AEtjO1XA07ZqiCgz-z6eW0K0pzlI1Ciqgf6y2FdBX9DFeKmZDN9rUMe_i0T1z6FOhPYmQwTNfR00hOIeKmbCNtPyNGqGWQ_hn03vtGv2cxErAuG73mqTIt337iUuunBpIWyKILMNi_RR8UXFMium96o31iXa1ddxQEhrf2KUG8G_PCjsblKLwhnxv-2tAqp_FzKnVTtCLt0DDbCz5ewCkozEw6IKwQPWDEbJAjKxV9Dw7RI7BgQlM1JswHefO5E",
-    title: "Plan the listener flow",
-    text: "The current UI accepts a mock session code. Android playback and QR generation or scanning are planned next steps.",
-    metaLeft: "Android target",
-    metaRight: "Wired or Bluetooth",
+    title: "Tuned to your ears.",
+    text: "Each listener gets independent delay, volume, and mute controls — so wired and Bluetooth headphones can land on the same beat.",
+    meta: ["Android target", "Wired or Bluetooth"],
+    kind: "listener" as const,
+  },
+] as const;
+
+type Hallmark = {
+  title: string;
+  text: string;
+  tag: string;
+  span?: "wide";
+};
+
+export const hallmarks: Hallmark[] = [
+  {
+    title: "Timestamped audio packets",
+    text: "The Rust core encodes sequence numbers and timestamps into every frame, so a listener can reorder packets and schedule playback against a shared clock.",
+    tag: "Packet format",
+    span: "wide",
   },
   {
-    tag: "Personal controls",
-    alt: "Headphones for a shared listening session",
-    src: "https://lh3.googleusercontent.com/aida/AEtjO1VtrMew7MbP5N-SmvveYUbAB5_vckqRZiG5S5OqlTvuAu-t1qlqvqbIl1ZXZ9zK-QDmXCjhrIWFkpZfDs8TDQohv-gxTmfAr0t-IYeHubR21wBZVnKkK12Qj9dQugw1tv8GZIoCfP3aTt77RUWtkhkGmzAdkV_1D0KAZBUMNonWFipGvum2OWg_XNQES7fFZiCxmnOMuqpcALJ9t_jmb_Ic8r4N4Z5Q_iCoN10sG8M8-68GjM0DteAa2W-m",
-    title: "Tune the mock playback",
-    text: "The prototype exposes independent delay, volume, and mute controls to model output differences.",
-    metaLeft: "Independent delay",
-    metaRight: "Volume + mute",
+    title: "Clock offset estimation",
+    text: "NTP-style samples estimate the offset between each listener's clock and the host, turning two independent clocks into one shared timeline.",
+    tag: "Timing model",
+    span: "wide",
+  },
+  {
+    title: "Bounded jitter buffer",
+    text: "Packets are reordered, memory stays bounded, and overdue frames are skipped deliberately.",
+    tag: "Playback buffer",
+  },
+  {
+    title: "Manual delay adjustment",
+    text: "The UI models compensation for the latency gap between wired and Bluetooth output.",
+    tag: "Per-listener control",
+  },
+  {
+    title: "Background playback target",
+    text: "Real Android playback is planned around a foreground service, so listening continues reliably with the screen locked.",
+    tag: "Next integration",
+    span: "wide",
   },
 ];
 
-export const hallmarks = [
-  {
-    title: "Timestamped Audio Packets",
-    text: "The Rust core encodes sequence numbers and timestamps so a future listener can reorder frames and schedule playback.",
-    tag: "Packet Format",
-  },
-  {
-    title: "Clock Offset Estimation",
-    text: "The Rust core models NTP-style samples for estimating the offset between host and listener clocks.",
-    tag: "Timing Model",
-  },
-  {
-    title: "Bounded Jitter Buffer",
-    text: "The tested Rust primitive reorders packets, bounds memory, and lets a future scheduler skip overdue frames deliberately.",
-    tag: "Playback Buffer",
-  },
-  {
-    title: "Manual Delay Adjustment",
-    text: "The Flutter mock UI models compensation for differences between wired and Bluetooth output latency.",
-    tag: "Per-Listener Control",
-  },
-  {
-    title: "Background Playback Target",
-    text: "Real Android playback is planned around a foreground service so screen-locked listening can continue reliably.",
-    tag: "Next Integration Step",
-  },
-];
+export const stats = [
+  { value: "2–5", label: "Listeners per session" },
+  { value: "Local", label: "Wi-Fi only — no internet" },
+  { value: "20–50ms", label: "Sync target after calibration" },
+  { value: "1", label: "Windows host to start" },
+] as const;
 
 export const footerColumns = [
   {
     title: "Product",
     links: [
-      { label: "How SyncIt works", href: "#gate" },
-      { label: "Host flow", href: "#pathways" },
-      { label: "Listener flow", href: "#pathways" },
+      { label: "How it works", href: "#gate" },
+      { label: "Host + listener flows", href: "#pathways" },
+      { label: "Sync features", href: "#lessons" },
       { label: "Prototype status", href: "#eternity" },
     ],
   },
@@ -112,7 +114,6 @@ export const footerColumns = [
       { label: "Timestamped packets", href: "#lessons" },
       { label: "Clock estimation", href: "#lessons" },
       { label: "Jitter buffer", href: "#lessons" },
-      { label: "Manual calibration", href: "#lessons" },
     ],
   },
   {
@@ -120,7 +121,7 @@ export const footerColumns = [
     links: [
       { label: "Local-first design", href: "#gate" },
       { label: "Windows + Android", href: "#pathways" },
-      { label: "Measured synchronization", href: "#lessons" },
+      { label: "Download builds", href: "https://github.com/shubham-hire/Syncit/releases/latest" },
     ],
   },
-];
+] as const;

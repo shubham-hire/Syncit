@@ -40,8 +40,7 @@ export function SiteNav() {
       <a className="brand" href="#top">
         <BrandMark />
         <span className="brand-tx">
-          <b>SYNCIT</b>
-          <i>LOCAL AUDIO SHARING</i>
+          <b>SyncIt</b>
         </span>
       </a>
       <nav aria-label="Primary navigation" className="nav-links">

@@ -31,3 +31,17 @@ export function DownloadIcon() {
     </svg>
   );
 }
+
+export function ChevronIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="12" viewBox="0 0 12 12" width="12">
+      <path
+        d="m4.5 2.5 3.5 3.5-3.5 3.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}

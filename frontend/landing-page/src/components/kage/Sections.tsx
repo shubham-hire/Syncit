@@ -1,20 +1,28 @@
 import {
   downloadAction,
+  flows,
   footerColumns,
   hallmarks,
   heroAction,
-  heroChapters,
-  receivers,
+  stats,
+  statusPill,
+  steps,
 } from "./content";
-import { ArrowIcon, BrandMark, DownloadIcon } from "./icons";
+import { BrandMark, ChevronIcon, DownloadIcon } from "./icons";
 
-function SectionHead({ num, title }: { num: string; title: string }) {
+function SectionIntro({
+  eyebrow,
+  dark,
+  children,
+}: {
+  eyebrow: string;
+  dark?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="sec-head" data-reveal="up">
-      <h2 className="k">
-        <b>{num}</b> — {title}
-      </h2>
-      <span className="rule-line" data-reveal="line" data-reveal-delay="160" />
+    <div className="sec-intro" data-reveal="up">
+      <span className={`eyebrow${dark ? " eyebrow-dark" : ""}`}>{eyebrow}</span>
+      <h2 className="display h-sec">{children}</h2>
     </div>
   );
 }
@@ -22,148 +30,198 @@ function SectionHead({ num, title }: { num: string; title: string }) {
 export function Hero() {
   return (
     <section className="hero" id="hero">
-      <div className="hero-body-wrap">
-        <div className="hero-top">
-          <div className="eyebrow">
-            <span className="dot" /> Chapter 00 — Local Audio Sharing Prototype
-          </div>
-          <h1 className="display h-hero">
-            One Audio Session.
-            <br />
-            Everyone Listens
-            <br />
-            Together.
-          </h1>
-          <p className="hero-sub body-copy">
-            SyncIt explores how a host could share local audio with a small group over Wi-Fi. The
-            current build demonstrates the interface and offline timing core; real capture,
-            transport, and playback are next.
-          </p>
-          <div className="hero-sync-status">
-            <span className="pulse-dot" />
-            Current build: mock host/listener flows · offline timing core · real audio next
-          </div>
-          <a className="arrowlink hero-action" href={heroAction.href}>
-            <span>{heroAction.label}</span>
-            <span className="ar">
-              <ArrowIcon />
-            </span>
-          </a>
-          <a className="hero-download" href={downloadAction.href} rel="noreferrer" target="_blank">
+      <div className="hero-inner">
+        <div className="status-pill" data-reveal="up">
+          <span className="pulse-dot" />
+          <span>{statusPill}</span>
+        </div>
+        <h1 className="display h-hero" data-reveal="up" data-reveal-delay="90">
+          One audio session.
+          <br />
+          Everyone listens <span className="grad">together.</span>
+        </h1>
+        <p className="hero-sub body-lg" data-reveal="up" data-reveal-delay="180">
+          SyncIt shares what your PC is playing with everyone&rsquo;s own headphones over Wi-Fi — no
+          internet, no pairing math, and every listener on the same beat.
+        </p>
+        <div className="hero-ctas" data-reveal="up" data-reveal-delay="270">
+          <a
+            className="btn btn-primary"
+            href={downloadAction.href}
+            rel="noreferrer"
+            target="_blank"
+          >
             <span>{downloadAction.label}</span>
             <DownloadIcon />
           </a>
-        </div>
-
-        <div className="hero-model-container">
-          <div className="broadcast-carrier">
-            <div className="carrier-wave" />
-            <div className="carrier-wave" />
-            <div className="carrier-wave" />
-          </div>
-        </div>
-      </div>
-
-      <div className="hero-spacer" />
-
-      <div className="hero-foot">
-        <div className="hero-cue">
-          <span>Scroll to see how it works</span>
-          <span className="track">
-            <i />
-          </span>
-        </div>
-        <div className="chapters">
-          {heroChapters.map((c) => (
-            <div className="chip" key={c.num}>
-              <span className="num">{c.num}</span>
-              <span className="tx">
-                <b>{c.title}</b>
-                <p>{c.text}</p>
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export function ProtocolSection() {
-  return (
-    <section className="sec" id="gate">
-      <SectionHead num="01" title="How SyncIt Is Designed" />
-      <div className="gate-grid">
-        <h3 className="display h-sec" data-reveal="up">
-          Share one local audio session without sharing headphones.
-        </h3>
-        <div className="gate-copy">
-          <p className="lead" data-reveal="up">
-            SyncIt is designed for small groups that want to hear the same audio while using their
-            own devices. The intended first path is a Windows host sending timestamped audio over a
-            local network to approved Android listeners.
-          </p>
-          <p className="body-copy" data-reveal="up" data-reveal-delay="110">
-            The current UI accepts a mock session code and models approval and playback controls. QR
-            support, network transport, and Android playback are planned integrations; internet
-            access is not part of the intended core experience.
-          </p>
-          <a className="arrowlink" href="#pathways" data-reveal="up" data-reveal-delay="220">
-            <span>See the host and listener flows</span>
-            <span className="ar">
-              <ArrowIcon />
-            </span>
+          <a className="btn-link" href={heroAction.href}>
+            <span>{heroAction.label}</span>
+            <ChevronIcon />
           </a>
         </div>
       </div>
-      <div className="gate-stats">
-        <div data-reveal="up">
-          <b>2–5</b>
-          <span className="lbl">Target listeners</span>
+
+      <div className="hero-visual" aria-hidden="true">
+        <div className="broadcast-carrier">
+          <div className="carrier-wave" />
+          <div className="carrier-wave" />
+          <div className="carrier-wave" />
         </div>
-        <div data-reveal="up" data-reveal-delay="90">
-          <b>Local</b>
-          <span className="lbl">Wi-Fi session</span>
-        </div>
-        <div data-reveal="up" data-reveal-delay="180">
-          <b>
-            20–50<small>ms</small>
-          </b>
-          <span className="lbl">PRD target after calibration</span>
-        </div>
-        <div data-reveal="up" data-reveal-delay="270">
-          <b>1</b>
-          <span className="lbl">Windows host first</span>
-        </div>
+      </div>
+
+      <div className="hero-cue">
+        <span>Scroll to explore</span>
       </div>
     </section>
   );
 }
 
-export function ReceiversSection() {
+export function GateSection() {
   return (
-    <section className="sec" id="pathways">
-      <SectionHead num="02" title="Host and Listener Flows" />
-      <div className="cards-mosaic">
-        {receivers.map((r, i) => (
+    <section className="sec" id="gate">
+      <SectionIntro eyebrow="How it works">
+        Three steps from one PC
+        <br />
+        to every headphones in the room.
+      </SectionIntro>
+      <div className="steps">
+        {steps.map((s, i) => (
           <article
-            className="rcard"
-            key={r.title}
+            className="step-card"
+            key={s.num}
+            data-reveal="up"
+            data-reveal-delay={String(i * 110)}
+          >
+            <span className="step-num">{s.num}</span>
+            <h3>{s.title}</h3>
+            <p>{s.text}</p>
+          </article>
+        ))}
+      </div>
+      <div className="stats" data-reveal="up">
+        {stats.map((s) => (
+          <div className="stat" key={s.label}>
+            <b>{s.value}</b>
+            <span>{s.label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function HostMock() {
+  return (
+    <div aria-hidden="true" className="mock mock-host">
+      <div className="mock-bar">
+        <i />
+        <i />
+        <i />
+      </div>
+      <div className="mock-code">
+        <span className="mock-lbl">Session code</span>
+        <span className="mock-code-val">
+          <b>4</b>
+          <b>8</b>
+          <b>2</b>
+          <b>6</b>
+        </span>
+      </div>
+      <div className="mock-row">
+        <span className="mock-avatar av-a">M</span>
+        <span className="mock-name">
+          <b>Meera</b>
+          <i>Pixel · Bluetooth</i>
+        </span>
+        <span className="mock-pill ok">In sync</span>
+      </div>
+      <div className="mock-row">
+        <span className="mock-avatar av-b">D</span>
+        <span className="mock-name">
+          <b>Dev</b>
+          <i>Wired · 3.5mm</i>
+        </span>
+        <span className="mock-pill ok">In sync</span>
+      </div>
+      <div className="mock-row is-pending">
+        <span className="mock-avatar av-c">S</span>
+        <span className="mock-name">
+          <b>Sam</b>
+          <i>Waiting for approval</i>
+        </span>
+        <span className="mock-pill">Approve</span>
+      </div>
+    </div>
+  );
+}
+
+function ListenerMock() {
+  return (
+    <div aria-hidden="true" className="mock mock-listener">
+      <div className="mock-track">
+        <span className="mock-art" />
+        <span className="mock-name">
+          <b>Now playing</b>
+          <i>From the host · Local Wi-Fi</i>
+        </span>
+        <span className="mock-pill ok">Live</span>
+      </div>
+      <div className="mock-progress">
+        <i />
+      </div>
+      <div className="mock-ctrl">
+        <span className="mock-lbl">Delay</span>
+        <span className="mock-slider">
+          <i style={{ width: "34%" }} />
+        </span>
+        <b>+34ms</b>
+      </div>
+      <div className="mock-ctrl">
+        <span className="mock-lbl">Volume</span>
+        <span className="mock-slider">
+          <i style={{ width: "72%" }} />
+        </span>
+        <b>72%</b>
+      </div>
+      <div className="mock-ctrl">
+        <span className="mock-lbl">Mute</span>
+        <span className="mock-switch">
+          <i />
+        </span>
+        <b>Off</b>
+      </div>
+    </div>
+  );
+}
+
+export function FlowsSection() {
+  return (
+    <section className="sec sec-fog" id="pathways">
+      <SectionIntro eyebrow="Host + Listener">
+        A control room for the host.
+        <br />
+        Personal controls for each listener.
+      </SectionIntro>
+      <div className="flows">
+        {flows.map((f, i) => (
+          <article
+            className="flow-card"
+            key={f.tag}
             data-reveal="up"
             data-reveal-delay={String(i * 130)}
           >
-            <div className="rcard-fr">
-              <img alt={r.alt} loading="lazy" referrerPolicy="no-referrer" src={r.src} />
-              <span className="rcard-tag">{r.tag}</span>
-              <div className="rcard-scrim" />
-              <div className="rcard-lab">
-                <h3>{r.title}</h3>
-                <p>{r.text}</p>
-              </div>
+            <div className="flow-stage">
+              <span className="flow-tag">{f.tag}</span>
+              {f.kind === "host" ? <HostMock /> : <ListenerMock />}
             </div>
-            <div className="rcard-meta">
-              <span>{r.metaLeft}</span>
-              <span>{r.metaRight}</span>
+            <div className="flow-copy">
+              <h3>{f.title}</h3>
+              <p>{f.text}</p>
+              <div className="flow-meta">
+                {f.meta.map((m) => (
+                  <span key={m}>{m}</span>
+                ))}
+              </div>
             </div>
           </article>
         ))}
@@ -174,50 +232,49 @@ export function ReceiversSection() {
 
 export function HallmarksSection() {
   return (
-    <section className="sec" id="lessons">
-      <SectionHead num="03" title="The Pieces Behind Synchronized Listening" />
-      <div className="cur-head">
-        <h3 className="display h-sec" data-reveal="up">
-          Model the path. Buffer the stream. Adjust per listener.
-        </h3>
-        <p className="body-lg" data-reveal="up" data-reveal-delay="120">
-          SyncIt separates host capture, network jitter, and device output delay in its design so
-          each part can be measured when the real integrations arrive.
-        </p>
-      </div>
-      <div className="cur">
+    <section className="sec sec-dark" id="lessons">
+      <SectionIntro dark eyebrow="Sync features">
+        The engineering behind
+        <br />
+        staying on the same beat.
+      </SectionIntro>
+      <div className="bento">
         {hallmarks.map((h, i) => (
-          <div className="les" key={h.title} data-reveal="up" data-reveal-delay={String(i * 90)}>
-            <span className="k">{String(i + 1).padStart(2, "0")}</span>
+          <article
+            className={`bento-card${h.span === "wide" ? " is-wide" : ""}`}
+            key={h.title}
+            data-reveal="up"
+            data-reveal-delay={String(i * 90)}
+          >
+            <span className="bento-num">{String(i + 1).padStart(2, "0")}</span>
             <h3>{h.title}</h3>
             <p>{h.text}</p>
-            <span className="t">{h.tag}</span>
-            <i className="bar" />
-          </div>
+            <span className="bento-tag">{h.tag}</span>
+          </article>
         ))}
       </div>
     </section>
   );
 }
 
-export function BundleSection() {
+export function FinaleSection() {
   return (
     <section className="sec fin" id="eternity">
-      <div className="eyebrow" data-reveal="up">
-        Chapter 04 — Try the Prototype
-      </div>
-      <h2 className="display" data-reveal="up" data-reveal-delay="90">
+      <span className="eyebrow" data-reveal="up">
+        Prototype
+      </span>
+      <h2 className="display h-fin" data-reveal="up" data-reveal-delay="90">
         Explore
         <br />
-        SyncIt
+        <span className="grad">SyncIt.</span>
       </h2>
       <p className="body-lg" data-reveal="up" data-reveal-delay="190">
-        The current build includes a Flutter interaction prototype, Rust packet and timing
-        primitives, and an offline simulator. Real Windows capture, Opus transport, and Android
-        background playback are the next integration steps.
+        The current build ships a Flutter interaction prototype, Rust packet and timing primitives,
+        and an offline simulator. Real Windows capture, Opus transport, and Android background
+        playback are the next integrations.
       </p>
       <a
-        className="cta"
+        className="btn btn-primary btn-lg"
         href={downloadAction.href}
         rel="noreferrer"
         target="_blank"
@@ -228,8 +285,8 @@ export function BundleSection() {
         <DownloadIcon />
       </a>
       <p className="download-note" data-reveal="up" data-reveal-delay="400">
-        Download the latest Windows or Android build from GitHub Releases. The release page will be
-        updated as the real audio integration becomes available.
+        Latest Windows and Android builds are on GitHub Releases. The page updates as real audio
+        integration lands.
       </p>
     </section>
   );
@@ -240,14 +297,14 @@ export function SiteFooter() {
     <footer className="foot">
       <div className="foot-grid">
         <div className="foot-brand" data-reveal="up">
-          <BrandMark withBase={false} />
+          <BrandMark />
           <p>
             SyncIt is a student-built local audio-sharing prototype for small groups using their own
             devices and headphones.
           </p>
         </div>
-        {footerColumns.map((col, i) => (
-          <div key={col.title} data-reveal="up" data-reveal-delay={String(i * 100)}>
+        {footerColumns.map((col) => (
+          <div key={col.title}>
             <h4>{col.title}</h4>
             <ul>
               {col.links.map((l) => (

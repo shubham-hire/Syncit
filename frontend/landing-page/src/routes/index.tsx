@@ -2,11 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { KageScene } from "@/components/kage/KageScene";
 import { SiteNav } from "@/components/kage/SiteNav";
 import {
-  BundleSection,
+  FinaleSection,
+  FlowsSection,
+  GateSection,
   HallmarksSection,
   Hero,
-  ProtocolSection,
-  ReceiversSection,
   SiteFooter,
 } from "@/components/kage/Sections";
 import { useReveal } from "@/components/kage/use-reveal";
@@ -42,10 +42,10 @@ function Index() {
         <SiteNav />
         <main id="main-content">
           <Hero />
-          <ProtocolSection />
-          <ReceiversSection />
+          <GateSection />
+          <FlowsSection />
           <HallmarksSection />
-          <BundleSection />
+          <FinaleSection />
         </main>
         <SiteFooter />
       </div>
