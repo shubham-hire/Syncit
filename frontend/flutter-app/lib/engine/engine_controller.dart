@@ -35,7 +35,7 @@ class ListenerStatus {
         concealed: (map['concealed'] as num?)?.toInt() ?? 0,
         buffered: (map['buffered'] as num?)?.toInt() ?? 0,
         roundTripMicros: (map['rtt_us'] as num?)?.toInt() ?? -1,
-        events: (map['events'] as List?)cast<String>() ?? const [],
+        events: (map['events'] as List?)?.cast<String>() ?? const <String>[],
       );
 
   final String state;
@@ -135,7 +135,7 @@ class EngineController {
         }),
       ),
     );
-    return (response['events'] as List?)cast<String>() ?? const [];
+    return (response['events'] as List?)?.cast<String>() ?? const <String>[];
   }
 
   /// Joins a host as a listener. Returns false in mock mode.
@@ -179,6 +179,26 @@ class EngineController {
       ),
     );
     return ListenerStatus.fromMap(response);
+  }
+
+  /// Polls the host for retained events (joins, approvals, timeouts) without
+  /// sending a command; drives the host page's listener list.
+  void startHostPolling(
+    void Function(List<String> events) onEvents, {
+    Duration interval = const Duration(milliseconds: 250),
+  }) {
+    stopPolling();
+    final bindings = _bindings;
+    if (bindings == null) return;
+    _poll = Timer.periodic(interval, (_) {
+      if (_hostHandle < 0) return;
+      final response = _decode(
+        bindings.hostCommand('{"handle":$_hostHandle}'),
+      );
+      onEvents(
+        (response['events'] as List?)?.cast<String>() ?? const <String>[],
+      );
+    });
   }
 
   /// Polls [onStatus] at [interval] until [stopPolling] is called.

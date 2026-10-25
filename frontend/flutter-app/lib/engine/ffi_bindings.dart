@@ -11,6 +11,8 @@ library;
 import 'dart:ffi';
 import 'dart:io' show Platform;
 
+import 'package:ffi/ffi.dart' show malloc;
+
 typedef _HostStartC = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _HostStartDart = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _CommandC = Pointer<Utf8> Function(Pointer<Utf8>);
