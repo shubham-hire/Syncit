@@ -1666,6 +1666,16 @@
   color-scheme: dark;
 }
 
+/* The engineering section (#lessons) is styled dark-on-light internals: its
+   text and mixes derive from --paper. In dark mode --paper inverts to
+   near-black, which would make that text invisible on the always-dark
+   section — so the section's own surface tokens flip back to light and the
+   whole subtree renders as a white band with dark text. */
+.dark .sec-dark {
+  --night: oklch(1 0 0);
+  --night-card: oklch(0.968 0.003 260);
+}
+
 /* Frosted chrome over dark content */
 .dark .nav {
   background: color-mix(in oklch, var(--paper) 62%, transparent);
