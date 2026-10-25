@@ -85,47 +85,47 @@ LiquidGlassFrost frostFor(
   return switch (weight) {
     LiquidGlassWeight.thin => LiquidGlassFrost(
       tint: (dark ? const Color(0xFF1C1C22) : Colors.white).withValues(
-        alpha: dark ? 0.50 : 0.58,
+        alpha: dark ? 0.42 : 0.34,
       ),
-      borderColor: Colors.white.withValues(alpha: dark ? 0.14 : 0.60),
-      sheenColor: Colors.white.withValues(alpha: dark ? 0.12 : 0.45),
+      borderColor: Colors.white.withValues(alpha: dark ? 0.18 : 0.85),
+      sheenColor: Colors.white.withValues(alpha: dark ? 0.16 : 0.65),
       shadowColor: Colors.black.withValues(alpha: dark ? 0.55 : 0.16),
       shadowBlur: 10,
       shadowOffset: const Offset(0, 4),
-      blurSigma: 14,
+      blurSigma: 18,
     ),
     LiquidGlassWeight.regular => LiquidGlassFrost(
       tint: (dark ? const Color(0xFF1C1C22) : Colors.white).withValues(
-        alpha: dark ? 0.55 : 0.64,
+        alpha: dark ? 0.48 : 0.40,
       ),
-      borderColor: Colors.white.withValues(alpha: dark ? 0.16 : 0.65),
-      sheenColor: Colors.white.withValues(alpha: dark ? 0.14 : 0.50),
+      borderColor: Colors.white.withValues(alpha: dark ? 0.20 : 0.90),
+      sheenColor: Colors.white.withValues(alpha: dark ? 0.18 : 0.70),
       shadowColor: Colors.black.withValues(alpha: dark ? 0.55 : 0.18),
       shadowBlur: 18,
       shadowOffset: const Offset(0, 8),
-      blurSigma: 18,
+      blurSigma: 24,
     ),
     LiquidGlassWeight.thick => LiquidGlassFrost(
       tint: (dark ? const Color(0xFF1C1C22) : Colors.white).withValues(
-        alpha: dark ? 0.62 : 0.72,
+        alpha: dark ? 0.55 : 0.50,
       ),
-      borderColor: Colors.white.withValues(alpha: dark ? 0.18 : 0.70),
-      sheenColor: Colors.white.withValues(alpha: dark ? 0.16 : 0.55),
+      borderColor: Colors.white.withValues(alpha: dark ? 0.22 : 0.95),
+      sheenColor: Colors.white.withValues(alpha: dark ? 0.20 : 0.75),
       shadowColor: Colors.black.withValues(alpha: dark ? 0.60 : 0.22),
       shadowBlur: 30,
       shadowOffset: const Offset(0, 12),
-      blurSigma: 24,
+      blurSigma: 30,
     ),
     LiquidGlassWeight.chrome => LiquidGlassFrost(
       tint: (dark ? const Color(0xFF1C1C22) : Colors.white).withValues(
-        alpha: dark ? 0.55 : 0.62,
+        alpha: dark ? 0.48 : 0.42,
       ),
-      borderColor: Colors.white.withValues(alpha: dark ? 0.16 : 0.65),
-      sheenColor: Colors.white.withValues(alpha: dark ? 0.14 : 0.50),
+      borderColor: Colors.white.withValues(alpha: dark ? 0.20 : 0.90),
+      sheenColor: Colors.white.withValues(alpha: dark ? 0.18 : 0.70),
       shadowColor: Colors.black.withValues(alpha: dark ? 0.55 : 0.18),
       shadowBlur: 22,
       shadowOffset: const Offset(0, 8),
-      blurSigma: 22,
+      blurSigma: 28,
     ),
   };
 }
@@ -324,9 +324,9 @@ class GlassScaffold extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
                     center: const Alignment(0.95, -0.85),
-                    radius: 0.9,
+                    radius: 1.1,
                     colors: [
-                      scheme.primary.withValues(alpha: 0.10),
+                      scheme.primary.withValues(alpha: 0.34),
                       scheme.primary.withValues(alpha: 0),
                     ],
                   ),
@@ -338,10 +338,24 @@ class GlassScaffold extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
                     center: const Alignment(-0.9, 0.95),
-                    radius: 0.9,
+                    radius: 1.1,
                     colors: [
-                      scheme.secondaryContainer.withValues(alpha: 0.35),
-                      scheme.secondaryContainer.withValues(alpha: 0),
+                      scheme.tertiaryContainer.withValues(alpha: 0.55),
+                      scheme.tertiaryContainer.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(-0.85, -0.95),
+                    radius: 1.0,
+                    colors: [
+                      scheme.primaryContainer.withValues(alpha: 0.45),
+                      scheme.primaryContainer.withValues(alpha: 0),
                     ],
                   ),
                 ),
