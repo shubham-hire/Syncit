@@ -54,7 +54,7 @@ jobs:
         run: cargo run -p audiosync-sim --locked
 
   rust-windows:
-    name: Rust (Windows, WASAPI path)
+    name: Rust (Windows, WASAPI compile check)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,10 +73,10 @@ jobs:
             target
           key: rust-windows-${{ hashFiles('Cargo.lock') }}
 
-      - name: Test (compiles and exercises the WASAPI adapter paths)
-        run: cargo test --workspace --locked
-
-      - name: Build all binaries
+      # Compile-only on Windows: proves the WASAPI adapter, host loop, and
+      # FFI crate build for the real target. Tests and hardware validation
+      # run on the development PCs instead.
+      - name: Build all binaries (compiles the WASAPI path)
         run: cargo build --workspace --locked
 
   landing-page:

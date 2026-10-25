@@ -61,8 +61,12 @@ backend/             Native engine and simulation code
   native/session/    Host/listener state and clock synchronization
   native/runtime/    Host orchestration and listener audio runtime
   native/apps/       audiosync-host and audiosync-listener command-line prototypes
+  native/ffi/        C-ABI bridge over the runtime for the Flutter application
   native/sim/        Offline host/listener and packet-loss simulation
 PRD.md               Product requirements
+CHANGELOG.md         Session-by-session change record
+ROADMAP.md           Milestone plan and unattended-work rules
+HOTSPOT_VALIDATION.md  Phase 6 hotspot test runbook
 Dockerfile           Reproducible Rust simulator image
 Makefile             Common checks
 ```

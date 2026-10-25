@@ -58,6 +58,13 @@ mod windows {
         com_initialized: bool,
     }
 
+    // SAFETY: the capture initializes COM in the multi-threaded apartment
+    // (`wasapi::initialize_mta`), so its interface pointers are valid on any
+    // thread. The host runtime constructs the capture once, moves it onto the
+    // single host-loop thread, and never shares it concurrently, which makes
+    // the auto Send bound sound for the scheduler's spawn pattern.
+    unsafe impl Send for WasapiCapture {}
+
     impl std::fmt::Debug for WasapiCapture {
         fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             formatter
