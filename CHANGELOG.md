@@ -78,6 +78,21 @@ simulator PASS — 68 tests), and pushed to `main`.
   owns a single loop thread. Verified for the Windows target with an
   isolated cross-check probe.
 
+### Current CI state (end of session)
+
+- **Rust (Linux, full gate): passing** — fmt, clippy `-D warnings`, all 68
+  tests, build, simulator.
+- **Landing page (lint, test, build): passing.**
+- **Rust (Windows, WASAPI compile check): still failing after the Send
+  fix** — a further Windows-only compile error remains undiagnosed. The
+  `Send` defect was verified fixed via a windows-msvc cross-check probe, so
+  the remaining error is something else in the Windows build (the full
+  error is visible in the Actions log; log download needs a browser
+  session, which this automation did not have). The owner is fixing this
+  next. Latest run: the "Build all binaries" step of the
+  `Rust (Windows, WASAPI compile check)` job.
+- Local Mac gate at HEAD `4f6a542`: fmt/clippy/tests/build/sim all green.
+
 ## Earlier milestones
 
 See `IMPLEMENTATION_PHASES.md` for the phase-by-phase record (protocol/codec
