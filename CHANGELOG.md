@@ -1,5 +1,50 @@
 # Changelog
 
+## October 26, 2026 — Landing page Apple-style redesign (merged to `main`, pushed)
+
+Redesigned `frontend/landing-page` from an editorial all-caps look into a clean
+Apple-style product page. Developed on `landing-page-refinements` and merged
+into `main` (fast-forward, pushed to origin). Verified in-browser on desktop
+(1440/1200/1100) and mobile (390) in both themes; `tsc`, `eslint`, and
+`vitest` (routing test) all pass.
+
+- Design system rewrite in `styles.css`: sentence-case type ramp at weight 600
+  with size-specific tracking, Apple-neutral palette (white / `#f5f5f7` fog /
+  near-black night) with the vermilion→ember gradient as the single signal
+  accent, pill buttons that press down on `:active`, and glass chrome.
+- Split hero: copy left, 3D product right, both visible on load; broadcast
+  rings and a soft stage glow centered on the product. Mobile stacks copy
+  above the product.
+- 3D scene (`headphone-scene.ts`): pose is DOM-anchored to the `.hero-visual`
+  column (tracks layout at any viewport); on desktop the product floats
+  through the page as a low-opacity watermark and returns full-size for the
+  exploded headphones/earbuds finale framing the CTA; on mobile it fades
+  between hero and finale. The render loop sleeps when the canvas is fully
+  transparent and wakes on scroll/pointer/resize.
+- Replaced broken remote stock photos with CSS-crafted mock UIs of the actual
+  prototype: host panel (session code, listener list, approve) and listener
+  panel (now-playing, delay/volume sliders, mute switch).
+- New sync demo panel (dark section centerpiece): host and listener waveforms
+  drift apart, then a critically damped spring snaps the listener back in
+  phase with a live status readout; pauses off-screen, static under reduced
+  motion.
+- New sections: Roadmap ("Works today / In progress") and FAQ (shadcn
+  accordion); FAQ added to nav, roadmap to footer.
+- Motion details: stat values count up on scroll (handles "20–50ms"/"2–5"
+  formats), spring-based pointer tilt on step/flow/bento cards (critically
+  damped, touch/reduced-motion aware), sliding nav active-indicator pill,
+  rAF-throttled nav scroll handler.
+- Theme system: dark mode moved from a `prefers-color-scheme` media query to a
+  `.dark` class on `<html>`; floating sun/moon toggle pill below the nav
+  stores the choice in localStorage, follows the system preference when unset,
+  and an inline pre-paint script in the SSR shell prevents wrong-theme flash.
+- Dark-theme fix: the always-dark Sync features section rendered its
+  `--paper`-derived text invisible in dark mode, so the section now renders
+  as a white band with dark text under `.dark` (light mode unchanged).
+- Assets/SEO: real `favicon.png` + `apple-touch-icon.png` (canvas-rendered
+  brand mark), 1200×630 `og.png` captured from the light hero, full
+  og/twitter meta plus light/dark `theme-color`.
+
 ## October 25, 2026 — Flutter Liquid Glass UI (unverified: needs `flutter test` on Windows)
 
 - New Apple-style design system in `lib/core/theme/`:
