@@ -13,6 +13,7 @@ import {
 } from "@/components/kage/Sections";
 import { useReveal } from "@/components/kage/use-reveal";
 import { useTilt } from "@/components/kage/tilt";
+import { ThemeToggle } from "@/components/kage/ThemeToggle";
 
 const TITLE = "SyncIt — Local Audio Sharing Prototype";
 const DESCRIPTION =
@@ -46,6 +47,7 @@ function Index() {
           Skip to content
         </a>
         <SiteNav />
+        <ThemeToggle />
         <main id="main-content">
           <Hero />
           <GateSection />

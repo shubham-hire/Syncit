@@ -1237,6 +1237,64 @@
     padding-bottom: 22px;
     max-width: 62ch;
   }
+
+  /* Theme toggle — floating segmented pill below the nav */
+  .theme-toggle {
+    position: fixed;
+    top: calc(var(--nav-h) + 12px);
+    right: var(--pad);
+    z-index: 60;
+    display: grid;
+    grid-auto-flow: column;
+    padding: 3px;
+    border: 1px solid var(--line-soft);
+    border-radius: 980px;
+    background: color-mix(in oklch, var(--paper) 74%, transparent);
+    backdrop-filter: blur(16px) saturate(170%);
+    -webkit-backdrop-filter: blur(16px) saturate(170%);
+    box-shadow: var(--shadow-card);
+  }
+  .theme-opt {
+    position: relative;
+    z-index: 1;
+    width: 34px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 980px;
+    background: transparent;
+    color: var(--ink-muted);
+    cursor: pointer;
+    transition: color 0.25s ease, transform 0.15s ease;
+  }
+  .theme-opt:active {
+    transform: scale(0.92);
+  }
+  .theme-opt:hover {
+    color: var(--ink);
+  }
+  .theme-opt.on {
+    color: var(--vermilion);
+  }
+  .theme-opt svg {
+    width: 15px;
+    height: 15px;
+  }
+  .theme-thumb {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: 34px;
+    border-radius: 980px;
+    background: color-mix(in oklch, var(--ink) 9%, transparent);
+    transition: transform 0.35s var(--ease-out);
+  }
+  .theme-thumb.pos-dark {
+    transform: translateX(34px);
+  }
 }
 
 @keyframes carrierPulse {
@@ -1455,6 +1513,28 @@
   .hero-visual {
     height: clamp(250px, 38vh, 380px);
   }
+  .theme-toggle {
+    top: calc(var(--nav-h) + 8px);
+    right: 12px;
+    padding: 2px;
+  }
+  .theme-opt {
+    width: 30px;
+    height: 26px;
+  }
+  .theme-opt svg {
+    width: 13px;
+    height: 13px;
+  }
+  .theme-thumb {
+    width: 30px;
+  }
+  .theme-thumb.pos-dark {
+    transform: translateX(30px);
+  }
+  .status-pill {
+    margin-right: 66px;
+  }
   .stats {
     grid-template-columns: repeat(2, 1fr);
     gap: 24px 18px;
@@ -1535,6 +1615,11 @@
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
+  .theme-toggle {
+    background: var(--paper);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 @media (prefers-contrast: more) {
   .nav {
@@ -1551,92 +1636,93 @@
 }
 
 /* ---------------------------------------------
-     Dark mode — system-driven. The whole page is
+     Dark theme — applied via the `.dark` class on
+     <html>, which RootShell's inline script sets
+     before first paint from the stored choice or
+     the system preference. The whole page is
      token-driven, so the swap is a palette turn:
      near-black paper, #1c1c1e-style cards, lifted
      text grays and a brightened vermilion.
      --------------------------------------------- */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: oklch(0.93 0.005 260);
-    --ink-2: oklch(0.86 0.007 260);
-    --ink-readable: oklch(0.78 0.008 260);
-    --ink-soft: oklch(0.7 0.01 260);
-    --ink-muted: oklch(0.63 0.011 260);
-    --paper: oklch(0.145 0.006 260);
-    --fog: oklch(0.205 0.008 260);
-    --fog-deep: oklch(0.25 0.009 260);
-    --night: oklch(0.11 0.007 260);
-    --night-card: oklch(0.185 0.009 260);
-    --vermilion: oklch(0.66 0.21 28);
-    --vermilion-bright: oklch(0.7 0.2 28);
-    --green: oklch(0.74 0.15 155);
-    --line: color-mix(in oklch, var(--ink) 14%, transparent);
-    --line-soft: color-mix(in oklch, var(--ink) 9%, transparent);
-    --shadow-mock: 0 24px 60px -20px oklch(0 0 0 / 60%);
-    --shadow-card: 0 20px 44px -18px oklch(0 0 0 / 50%);
-    --shadow-card-hover: 0 30px 60px -20px oklch(0 0 0 / 60%);
-    color-scheme: dark;
-  }
-
-  /* Frosted chrome over dark content */
-  .nav {
-    background: color-mix(in oklch, var(--paper) 62%, transparent);
-  }
-  .nav.scrolled {
-    background: color-mix(in oklch, var(--paper) 78%, transparent);
-  }
-  .nav-mobile {
-    background: color-mix(in oklch, var(--paper) 88%, transparent);
-  }
-  .skip-link {
-    background: var(--fog);
-    color: var(--ink);
-  }
-
-  /* Surfaces that hardcoded light assumptions */
-  .status-pill {
-    background: color-mix(in oklch, var(--fog) 70%, transparent);
-  }
-  .mock-bar i {
-    background: var(--fog);
-  }
-  .flow-stage {
-    background: radial-gradient(
-      120% 90% at 50% 0%,
-      color-mix(in oklch, var(--vermilion) 8%, var(--paper)) 0%,
-      var(--fog) 68%
-    );
-  }
-  .hero-visual .broadcast-carrier {
-    opacity: 0.75;
-  }
-  .foot {
-    background: var(--fog);
-  }
-
-  /* The mock panels keep their shadow readable on near-black */
-  .mock {
-    border-color: var(--line);
-  }
-
-  ::selection {
-    background: var(--vermilion);
-    color: oklch(1 0 0);
-  }
+:root.dark {
+  --ink: oklch(0.93 0.005 260);
+  --ink-2: oklch(0.86 0.007 260);
+  --ink-readable: oklch(0.78 0.008 260);
+  --ink-soft: oklch(0.7 0.01 260);
+  --ink-muted: oklch(0.63 0.011 260);
+  --paper: oklch(0.145 0.006 260);
+  --fog: oklch(0.205 0.008 260);
+  --fog-deep: oklch(0.25 0.009 260);
+  --night: oklch(0.11 0.007 260);
+  --night-card: oklch(0.185 0.009 260);
+  --vermilion: oklch(0.66 0.21 28);
+  --vermilion-bright: oklch(0.7 0.2 28);
+  --green: oklch(0.74 0.15 155);
+  --line: color-mix(in oklch, var(--ink) 14%, transparent);
+  --line-soft: color-mix(in oklch, var(--ink) 9%, transparent);
+  --shadow-mock: 0 24px 60px -20px oklch(0 0 0 / 60%);
+  --shadow-card: 0 20px 44px -18px oklch(0 0 0 / 50%);
+  --shadow-card-hover: 0 30px 60px -20px oklch(0 0 0 / 60%);
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) and (prefers-reduced-transparency: reduce) {
-  .nav {
+/* Frosted chrome over dark content */
+.dark .nav {
+  background: color-mix(in oklch, var(--paper) 62%, transparent);
+}
+.dark .nav.scrolled {
+  background: color-mix(in oklch, var(--paper) 78%, transparent);
+}
+.dark .nav-mobile {
+  background: color-mix(in oklch, var(--paper) 88%, transparent);
+}
+.dark .skip-link {
+  background: var(--fog);
+  color: var(--ink);
+}
+
+/* Surfaces that hardcoded light assumptions */
+.dark .status-pill {
+  background: color-mix(in oklch, var(--fog) 70%, transparent);
+}
+.dark .mock-bar i {
+  background: var(--fog);
+}
+.dark .flow-stage {
+  background: radial-gradient(
+    120% 90% at 50% 0%,
+    color-mix(in oklch, var(--vermilion) 8%, var(--paper)) 0%,
+    var(--fog) 68%
+  );
+}
+.dark .hero-visual .broadcast-carrier {
+  opacity: 0.75;
+}
+.dark .foot {
+  background: var(--fog);
+}
+
+/* The mock panels keep their shadow readable on near-black */
+.dark .mock {
+  border-color: var(--line);
+}
+
+.dark ::selection {
+  background: var(--vermilion);
+  color: oklch(1 0 0);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .dark .nav {
     background: var(--paper);
   }
-  .nav.scrolled {
+  .dark .nav.scrolled {
     background: var(--paper);
   }
-  .nav-mobile {
+  .dark .nav-mobile {
     background: var(--paper);
   }
-  .status-pill {
+  .dark .status-pill {
     background: var(--fog);
   }
 }
