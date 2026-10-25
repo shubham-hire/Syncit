@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/liquid_glass.dart';
 import '../../session/session_constants.dart';
 
 class SessionCodeCard extends StatelessWidget {
@@ -25,13 +26,11 @@ class SessionCodeCard extends StatelessWidget {
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
-            Container(
+            LiquidGlass(
+              weight: LiquidGlassWeight.thick,
+              borderRadius: 16,
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(12),
-              ),
               child: Column(
                 children: [
                   const Icon(Icons.qr_code_2, size: 96),

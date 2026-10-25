@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/liquid_glass.dart';
+
 class PlaybackControls extends StatelessWidget {
   const PlaybackControls({
     required this.delay,
@@ -20,7 +22,8 @@ class PlaybackControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return LiquidGlass(
+      weight: LiquidGlassWeight.chrome,
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(

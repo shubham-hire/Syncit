@@ -1,5 +1,26 @@
 # Changelog
 
+## October 25, 2026 — Flutter Liquid Glass UI (unverified: needs `flutter test` on Windows)
+
+- New Apple-style design system in `lib/core/theme/`:
+  - `liquid_glass.dart`: `LiquidGlass` material (backdrop blur + saturation
+    boost, bright top-edge sheen, size-scaled soft shadows per the
+    `apple-design` skill's material rules), `PressableGlass` (scale feedback
+    on pointer-down, reduced-motion aware), `GlassScaffold` (floating glass
+    app bar over a gradient backdrop with faint brand washes so the glass has
+    content to refract), and a `LiquidGlassWeight` hierarchy (chrome/thick/
+    regular/thin).
+  - `app_theme.dart`: brand vermilion seed, quiet solid content cards with
+    hairline borders (glass is reserved for chrome and controls — never
+    stacked on glass), floating snackbars, modern sliders.
+- Applied: home role cards are pressable glass; host and listener pages use
+  the glass scaffold; the session join-info panel is thick glass; playback
+  controls are glass chrome. Every user-facing string, tooltip, and test
+  expectation is unchanged; the engine layer was not touched.
+- Verified October 25: `flutter analyze` — No issues found; `flutter test`
+  — all 9 tests pass; `dart format` clean.
+
+
 ## October 25, 2026 — Windows Flutter listener output
 
 - Replaced the Flutter FFI listener's per-pump `NullSink` with a persistent
