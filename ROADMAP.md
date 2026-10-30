@@ -93,4 +93,4 @@ frames / 5 s at exact cadence on loopback with zero concealment.
 - Flutter SDK (when present): `.tools/flutter-3.47.7/bin/flutter`.
 - Record run state in `.zcode/automation-state.md` (local, gitignored).
 - If a step needs an owner decision, note it and continue with the next
-  automatable item.
+  automatable item. ..

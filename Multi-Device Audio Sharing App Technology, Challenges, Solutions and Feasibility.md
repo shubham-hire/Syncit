@@ -15,16 +15,16 @@ The second shape is the one this document focuses on, because it avoids the bigg
 
 ## 2. Summary Table
 
-| Area | Conclusion |
-| --- | --- |
-| Overall feasibility | Feasible for a supported non-Apple host/listener system, music-first. Platform support must be added incrementally; "any device, any content, zero setup" is not realistic |
-| Biggest technical risk | Unknown and variable Bluetooth latency on each listener's headphones |
-| Biggest environmental risk | Hotspots that block device-to-device traffic (client isolation) |
-| Biggest platform risk | Background audio on phones, especially iPhone |
-| Best MVP | Windows host + Android listeners first, with the protocol designed for either role; music only, manual delay slider |
-| Best transport idea | Opus-encoded audio over the local Wi-Fi network with clock-synchronized playback |
-| Best existing tool to learn from | Snapcast (open source, synchronized multi-room audio) |
-| Main project risk | Platform differences, hotspot behavior and Bluetooth variance make the experience difficult to reproduce |
+| Area                             | Conclusion                                                                                                                                                                 |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Overall feasibility              | Feasible for a supported non-Apple host/listener system, music-first. Platform support must be added incrementally; "any device, any content, zero setup" is not realistic |
+| Biggest technical risk           | Unknown and variable Bluetooth latency on each listener's headphones                                                                                                       |
+| Biggest environmental risk       | Hotspots that block device-to-device traffic (client isolation)                                                                                                            |
+| Biggest platform risk            | Background audio on phones, especially iPhone                                                                                                                              |
+| Best MVP                         | Windows host + Android listeners first, with the protocol designed for either role; music only, manual delay slider                                                        |
+| Best transport idea              | Opus-encoded audio over the local Wi-Fi network with clock-synchronized playback                                                                                           |
+| Best existing tool to learn from | Snapcast (open source, synchronized multi-room audio)                                                                                                                      |
+| Main project risk                | Platform differences, hotspot behavior and Bluetooth variance make the experience difficult to reproduce                                                                   |
 
 ## 3. How It Works (Simple Version)
 
@@ -56,12 +56,12 @@ Opus is a codec designed for real-time audio such as calls, live streaming and b
 
 ### 4.3 Transport options
 
-| Option | Strengths | Weaknesses |
-| --- | --- | --- |
-| UDP unicast to each listener | Simple, low latency, predictable | Bandwidth grows with listener count; you build reliability yourself |
-| WebSocket / TCP | Easy to implement, works in browsers | Retransmission can add delay spikes |
-| WebRTC | Browser listeners with no install, Opus built in | More complex; clock drift handling must be added on top |
-| Multicast | Efficient for many listeners | Often unreliable on Wi-Fi, so avoid it at first |
+| Option                       | Strengths                                        | Weaknesses                                                          |
+| ---------------------------- | ------------------------------------------------ | ------------------------------------------------------------------- |
+| UDP unicast to each listener | Simple, low latency, predictable                 | Bandwidth grows with listener count; you build reliability yourself |
+| WebSocket / TCP              | Easy to implement, works in browsers             | Retransmission can add delay spikes                                 |
+| WebRTC                       | Browser listeners with no install, Opus built in | More complex; clock drift handling must be added on top             |
+| Multicast                    | Efficient for many listeners                     | Often unreliable on Wi-Fi, so avoid it at first                     |
 
 One research project reported roughly 40 ms audio latency between two MacBooks on a local network using WebRTC. That is a best case from an academic setting. A demo tool I found also states that it does not implement clock drift compensation, so synchronized playback across devices is work you would add.
 
@@ -85,13 +85,13 @@ A newer protocol called Sendspin appears to offer NTP-style clock sync, jitter b
 
 ### 4.7 Suggested stack for a first prototype
 
-| Job | Technology |
-| --- | --- |
-| Capture audio on the host | WASAPI loopback (Windows) |
-| Compress | Opus |
-| Send to listeners | UDP or WebSocket over the hotspot |
-| Clock sync and timed playback | Snapcast-style approach, or reuse Snapcast |
-| Listener side | Android app, or a browser page for a quick test |
+| Job                           | Technology                                      |
+| ----------------------------- | ----------------------------------------------- |
+| Capture audio on the host     | WASAPI loopback (Windows)                       |
+| Compress                      | Opus                                            |
+| Send to listeners             | UDP or WebSocket over the hotspot               |
+| Clock sync and timed playback | Snapcast-style approach, or reuse Snapcast      |
+| Listener side                 | Android app, or a browser page for a quick test |
 
 The first prototype should implement Windows hosting and Android listening, but the wire protocol and session model should not assume that the host is always Windows. Android hosting and Windows listening can follow once the core synchronization behavior is validated.
 
@@ -99,20 +99,20 @@ The first prototype should implement Windows hosting and Android listening, but 
 
 ### 5.1 Summary table
 
-| # | Challenge | Severity | Solution | Fully solvable? |
-| --- | --- | --- | --- | --- |
-| 1 | Bluetooth delay on each listener's phone | High | Calibration plus manual offset slider | Partly |
-| 2 | Clock sync between host and phones | High | NTP-style sync, timestamped playback | Yes |
-| 3 | Wi-Fi jitter and packet loss | Medium | Jitter buffer, Opus loss concealment | Mostly |
-| 4 | Hotspot blocks device-to-device traffic | High | Test early, offer fallbacks | Depends on hardware |
-| 5 | Host cannot capture some audio | Medium | Loopback capture, accept DRM limits | Partly |
-| 6 | Phones pause audio in the background | High | Native app, foreground service | Mostly solvable on tested Android devices; other platforms require separate validation |
-| 7 | Video and audio out of sync | High | Music-first, delay-the-video helper | Partly |
-| 8 | Clock drift over time | Medium | Continuous correction by resampling | Yes |
-| 9 | Joining is too much effort | Medium | QR code, web fallback | Mostly |
-| 10 | Strangers joining, security | Low-Medium | Token in the QR code, host approval | Yes |
-| 11 | Android phone makers killing background apps | Medium | Foreground service, battery-setting guidance | Mostly |
-| 12 | Wi-Fi and Bluetooth sharing the 2.4 GHz band | Medium | Use 5 GHz for the hotspot | Mostly |
+| #  | Challenge                                    | Severity   | Solution                                     | Fully solvable?                                                                        |
+| -- | -------------------------------------------- | ---------- | -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1  | Bluetooth delay on each listener's phone     | High       | Calibration plus manual offset slider        | Partly                                                                                 |
+| 2  | Clock sync between host and phones           | High       | NTP-style sync, timestamped playback         | Yes                                                                                    |
+| 3  | Wi-Fi jitter and packet loss                 | Medium     | Jitter buffer, Opus loss concealment         | Mostly                                                                                 |
+| 4  | Hotspot blocks device-to-device traffic      | High       | Test early, offer fallbacks                  | Depends on hardware                                                                    |
+| 5  | Host cannot capture some audio               | Medium     | Loopback capture, accept DRM limits          | Partly                                                                                 |
+| 6  | Phones pause audio in the background         | High       | Native app, foreground service               | Mostly solvable on tested Android devices; other platforms require separate validation |
+| 7  | Video and audio out of sync                  | High       | Music-first, delay-the-video helper          | Partly                                                                                 |
+| 8  | Clock drift over time                        | Medium     | Continuous correction by resampling          | Yes                                                                                    |
+| 9  | Joining is too much effort                   | Medium     | QR code, web fallback                        | Mostly                                                                                 |
+| 10 | Strangers joining, security                  | Low-Medium | Token in the QR code, host approval          | Yes                                                                                    |
+| 11 | Android phone makers killing background apps | Medium     | Foreground service, battery-setting guidance | Mostly                                                                                 |
+| 12 | Wi-Fi and Bluetooth sharing the 2.4 GHz band | Medium     | Use 5 GHz for the hotspot                    | Mostly                                                                                 |
 
 ### 5.2 Bluetooth delay on each listener's phone
 
@@ -226,12 +226,12 @@ You cannot fix isolation from inside the app, so this needs documentation and fa
 
 ### 6.2 By platform
 
-| Platform | As host | As listener |
-| --- | --- | --- |
-| Windows | Strong: loopback capture works without a driver | Possible, lower priority |
-| Other non-Apple platforms | Requires platform-specific investigation | Possible where background playback is supported |
-| Android | Possible but restricted: playback-capture consent and DRM limits | Strong: foreground service, low-latency audio |
-| Apple devices | Out of scope for the initial project | Out of scope for the initial project |
+| Platform                  | As host                                                          | As listener                                     |
+| ------------------------- | ---------------------------------------------------------------- | ----------------------------------------------- |
+| Windows                   | Strong: loopback capture works without a driver                  | Possible, lower priority                        |
+| Other non-Apple platforms | Requires platform-specific investigation                         | Possible where background playback is supported |
+| Android                   | Possible but restricted: playback-capture consent and DRM limits | Strong: foreground service, low-latency audio   |
+| Apple devices             | Out of scope for the initial project                             | Out of scope for the initial project            |
 
 ### 6.3 Overall verdict
 
@@ -271,12 +271,12 @@ Connect different headphones to the phones and measure the offset needed for the
 
 ### Step 4: Decision
 
-| Result | Meaning |
-| --- | --- |
-| Hotspot works, sync is acceptable for music with a slider | Continue to a custom MVP |
-| Hotspot blocks traffic on common phones | Redesign around routers or relay, or stop |
-| Background audio keeps dying | Prioritize a native Android app, or limit scope |
-| Bluetooth variance is too large to tune by hand | Invest in calibration, or reconsider the product |
+| Result                                                    | Meaning                                          |
+| --------------------------------------------------------- | ------------------------------------------------ |
+| Hotspot works, sync is acceptable for music with a slider | Continue to a custom MVP                         |
+| Hotspot blocks traffic on common phones                   | Redesign around routers or relay, or stop        |
+| Background audio keeps dying                              | Prioritize a native Android app, or limit scope  |
+| Bluetooth variance is too large to tune by hand           | Invest in calibration, or reconsider the product |
 
 ## 10. Users, Use Cases and Project Motivation
 
